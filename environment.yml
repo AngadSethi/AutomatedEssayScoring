@@ -1,0 +1,20 @@
+name: aes
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - ujson
+  - numpy
+  - pip
+  - spacy=2.0.16
+  - tensorboard
+  - tensorflow
+  - tensorboardX
+  - tqdm
+  - urllib3
+  - pytorch
+  - pandas
+  - pip:
+    - torch
