@@ -216,27 +216,31 @@ def main(args):
 
                 # Log info
                 step += batch_size
+                steps_till_eval -= batch_size
                 progress_bar.update(batch_size)
                 progress_bar.set_postfix(epoch=epoch, MSE=loss_val)
                 tbx.add_scalar('train/MSE', loss_val, step)
                 tbx.add_scalar('train/LR',
                                optimizer.param_groups[0]['lr'],
                                step)
-        # Evaluate and save checkpoint
-        log.info(f'Evaluating')
-        results, pred_dict = evaluate(model, dev_loader, device)
-        saver.save(step, model, results[args.metric_name], device)
 
-        # Log to console
-        results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
-        log.info(f'Dev {results_str}')
+                if steps_till_eval <= 0:
+                    steps_till_eval = args.eval_steps
+                    # Evaluate and save checkpoint
+                    log.info(f'Evaluating')
+                    results, pred_dict = evaluate(model, dev_loader, device)
+                    saver.save(step, model, results[args.metric_name], device)
 
-        if args.train_split:
-            results_str = ', '.join(f'{k}: {v}' for k, v in pred_dict.items())
-            log.info(f'Dev Stratified {results_str}')
+                    # Log to console
+                    results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results.items())
+                    log.info(f'Dev {results_str}')
 
-        for k, v in results.items():
-            tbx.add_scalar(f'dev/{k}', v, step)
+                    if args.train_split:
+                        results_str = ', '.join(f'{k}: {v}' for k, v in pred_dict.items())
+                        log.info(f'Dev Stratified {results_str}')
+
+                    for k, v in results.items():
+                        tbx.add_scalar(f'dev/{k}', v, step)
 
 
 def evaluate(model, data_loader, device):
@@ -286,7 +290,7 @@ def evaluate(model, data_loader, device):
     final_dict = {}
 
     true = data_loader.dataset.domain1_scores_raw
-    plt.scatter(pred_dict.values(), true)
+    util.visualize_table(list(pred_dict.keys()), list(pred_dict.values()), 5)
     for s in pred_dict.keys():
         index = data_loader.dataset.essay_ids.index(s)
         essay_s = data_loader.dataset.essay_sets[index]

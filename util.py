@@ -16,6 +16,7 @@ import torch.nn.functional as F
 import pandas as pd
 from sklearn.metrics import cohen_kappa_score
 from sklearn import metrics
+from prettytable import PrettyTable
 
 
 class AverageMeter:
@@ -646,6 +647,9 @@ def visualize(tbx, essay_ids, rater_1, rater_2, num_visuals, step, split='dev'):
     for index, id_ in enumerate(torch.flatten(essay_ids).tolist()):
         pred_dict[str(id_)] = (rater_1[index, 0], rater_2[index, 0])
 
+    x = PrettyTable()
+    x.field_names = ["Essay", "Gold Score", "Predicted Score", "Annual Rainfall"]
+
     dataset = pd.read_csv(
         './data/training_set_rel3.tsv',
         header=0,
@@ -664,6 +668,7 @@ def visualize(tbx, essay_ids, rater_1, rater_2, num_visuals, step, split='dev'):
             score_2 = dataset.iloc[row_index]['domain2_score']
 
         gold_rater1, gold_rater2 = score_1, score_2
+        x.add_row([essay, gold_rater1, gold_rater2])
 
         tbl_fmt = (
                 f'- **Essay:** {essay}\n'
@@ -675,3 +680,48 @@ def visualize(tbx, essay_ids, rater_1, rater_2, num_visuals, step, split='dev'):
         tbx.add_text(tag=f'{split}/{i+1}_of_{num_visuals}',
                      text_string=tbl_fmt,
                      global_step=step)
+    print(x)
+
+
+def visualize_table(essay_ids, rater_1, num_visuals):
+    """Visualize text examples to TensorBoard.
+
+    Args:
+        tbx (tensorboardX.SummaryWriter): Summary writer.
+        pred_dict (dict): dict of predictions of the form id -> pred.
+        eval_path (str): Path to eval JSON file.
+        step (int): Number of examples seen so far during training.
+        split (str): Name of data split being visualized.
+        num_visuals (int): Number of visuals to select at random from preds.
+    """
+    if num_visuals <= 0:
+        return
+
+    visual_ids = np.random.choice(essay_ids, size=num_visuals, replace=False)
+    pred_dict = {}
+    for index, id_ in enumerate(essay_ids):
+        pred_dict[str(id_)] = rater_1[index]
+
+    x = PrettyTable()
+    x.field_names = ["Essay", "Gold Score", "Predicted Score"]
+
+    dataset = pd.read_csv(
+        './data/training_set_rel3.tsv',
+        header=0,
+        sep='\t',
+        usecols=['essay_id', 'essay_set', 'essay', 'domain1_score', 'domain2_score'],
+        encoding='latin-1'
+    )
+
+    for i, essay_id in enumerate(visual_ids):
+        rater1 = pred_dict[str(essay_id)]
+        row_index = dataset['essay_id'].tolist().index(essay_id)
+        essay = dataset.iloc[row_index]['essay']
+        score_1 = dataset.iloc[row_index]['domain1_score']
+        score_2 = 0
+        if not math.isnan(dataset.iloc[row_index]['domain2_score']):
+            score_2 = dataset.iloc[row_index]['domain2_score']
+
+        gold_rater1, gold_rater2 = score_1, score_2
+        x.add_row([essay, gold_rater1, rater1])
+    print(x)

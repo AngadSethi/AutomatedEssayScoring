@@ -46,6 +46,10 @@ def get_train_args():
                         type=int,
                         default=224,
                         help='Random seed for reproducibility.')
+    parser.add_argument('--eval_steps',
+                        type=int,
+                        default=1000,
+                        help='Number of steps till evaluation')
 
     args, _ = parser.parse_known_args()
 
