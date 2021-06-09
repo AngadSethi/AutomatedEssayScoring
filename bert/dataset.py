@@ -1,13 +1,12 @@
-import numpy as np
-
+import pandas as pd
 import torch
 from torch.utils.data import Dataset
-import pandas as pd
 from transformers import BertTokenizerFast
 
 
 class BertDataset(Dataset):
-    def __init__(self, dataset: pd.DataFrame, max_seq_length: int, doc_stride: int, prompts: dict, bert_model: str = 'bert-base-uncased'):
+    def __init__(self, dataset: pd.DataFrame, max_seq_length: int, doc_stride: int, prompts: dict,
+                 bert_model: str = 'bert-base-uncased'):
         self.datalist = dataset.drop(['domain1_score', 'domain2_score'], axis=1)
         self.domain1_scores = dataset['domain1_score'].tolist()
         self.domain1_scores_raw = dataset['domain1_score'].tolist()
@@ -33,8 +32,8 @@ class BertDataset(Dataset):
         )
 
         self.domain1_scores = [(score - prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) / (
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
                                enumerate(self.domain1_scores)]
 
     def __getitem__(self, index: int):

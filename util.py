@@ -1,7 +1,9 @@
 """Utility classes and methods.
 
+Most of the functions here have been borrowed from https://github.com/chrischute/squad
+
 Author:
-    Angad Sethi
+    Angad Sethi (angadsethi_2k18co066@dtu.ac.in)
 """
 import json
 import logging
@@ -9,13 +11,11 @@ import math
 import os
 import queue
 import shutil
+
+import numpy as np
+import pandas as pd
 import torch
 import tqdm
-import numpy as np
-import torch.nn.functional as F
-import pandas as pd
-from sklearn.metrics import cohen_kappa_score
-from sklearn import metrics
 from prettytable import PrettyTable
 
 
@@ -25,6 +25,7 @@ class AverageMeter:
     Adapted from:
         > https://github.com/pytorch/examples/blob/master/imagenet/main.py
     """
+
     def __init__(self):
         self.avg = 0
         self.sum = 0
@@ -47,55 +48,6 @@ class AverageMeter:
         self.avg = self.sum / self.count
 
 
-class EMA:
-    """Exponential moving average of model parameters.
-    Args:
-        model (torch.nn.Module): Model with parameters whose EMA will be kept.
-        decay (float): Decay rate for exponential moving average.
-    """
-    def __init__(self, model, decay):
-        self.decay = decay
-        self.shadow = {}
-        self.original = {}
-
-        # Register model parameters
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                self.shadow[name] = param.data.clone()
-
-    def __call__(self, model, num_updates):
-        decay = min(self.decay, (1.0 + num_updates) / (10.0 + num_updates))
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                assert name in self.shadow
-                new_average = \
-                    (1.0 - decay) * param.data + decay * self.shadow[name]
-                self.shadow[name] = new_average.clone()
-
-    def assign(self, model):
-        """Assign exponential moving average of parameter values to the
-        respective parameters.
-        Args:
-            model (torch.nn.Module): Model to assign parameter values.
-        """
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                assert name in self.shadow
-                self.original[name] = param.data.clone()
-                param.data = self.shadow[name]
-
-    def resume(self, model):
-        """Restore original parameters to a model. That is, put back
-        the values that were in each parameter at the last call to `assign`.
-        Args:
-            model (torch.nn.Module): Model to assign parameter values.
-        """
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                assert name in self.shadow
-                param.data = self.original[name]
-
-
 class CheckpointSaver:
     """Class to save and load model checkpoints.
 
@@ -113,6 +65,7 @@ class CheckpointSaver:
             minimizes the metric.
         log (logging.Logger): Optional logger for printing information.
     """
+
     def __init__(self, save_dir, max_checkpoints, metric_name,
                  maximize_metric=False, log=None):
         super(CheckpointSaver, self).__init__()
@@ -238,57 +191,6 @@ def get_available_devices():
     return device, gpu_ids
 
 
-def save_preds(preds, save_dir, file_name='predictions.csv'):
-    """Save predictions `preds` to a CSV file named `file_name` in `save_dir`.
-
-    Args:
-        preds (list): List of predictions each of the form (id, start, end),
-            where id is an example ID, and start/end are indices in the context.
-        save_dir (str): Directory in which to save the predictions file.
-        file_name (str): File name for the CSV file.
-
-    Returns:
-        save_path (str): Path where CSV file was saved.
-    """
-    # Validate format
-    if (not isinstance(preds, list)
-            or any(not isinstance(p, tuple) or len(p) != 3 for p in preds)):
-        raise ValueError('preds must be a list of tuples (id, start, end)')
-
-    # Make sure predictions are sorted by ID
-    preds = sorted(preds, key=lambda p: p[0])
-
-    # Save to a CSV file
-    save_path = os.path.join(save_dir, file_name)
-    np.savetxt(save_path, np.array(preds), delimiter=',', fmt='%d')
-
-    return save_path
-
-
-def get_save_dir(base_dir, name, training, id_max=100):
-    """Get a unique save directory by appending the smallest positive integer
-    `id < id_max` that is not already taken (i.e., no dir exists with that id).
-
-    Args:
-        base_dir (str): Base directory in which to make save directories.
-        name (str): Name to identify this training run. Need not be unique.
-        training (bool): Save dir. is for training (determines subdirectory).
-        id_max (int): Maximum ID number before raising an exception.
-
-    Returns:
-        save_dir (str): Path to a new directory with a unique name.
-    """
-    for uid in range(1, id_max):
-        subdir = 'train' if training else 'test'
-        save_dir = os.path.join(base_dir, subdir, f'{name}-{uid:02d}')
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            return save_dir
-
-    raise RuntimeError('Too many save directories created with the same name. \
-                       Delete old save directories or use another name.')
-
-
 def get_logger(log_dir, name):
     """Get a `logging.Logger` instance that prints to the console
     and an auxiliary file.
@@ -300,12 +202,14 @@ def get_logger(log_dir, name):
     Returns:
         logger (logging.Logger): Logger instance for logging events.
     """
+
     class StreamHandlerWithTQDM(logging.Handler):
         """Let `logging` print without breaking `tqdm` progress bars.
 
         See Also:
             > https://stackoverflow.com/questions/38543506
         """
+
         def emit(self, record):
             try:
                 msg = self.format(record)
@@ -526,61 +430,6 @@ def kappa(rater_a, rater_b,
     return 1.0 - numerator / denominator
 
 
-def masked_softmax(logits, mask, dim=-1, log_softmax=False):
-    """Take the softmax of `logits` over given dimension, and set
-    entries to 0 wherever `mask` is 0.
-    Args:
-        logits (torch.Tensor): Inputs to the softmax function.
-        mask (torch.Tensor): Same shape as `logits`, with 0 indicating
-            positions that should be assigned 0 probability in the output.
-        dim (int): Dimension over which to take softmax.
-        log_softmax (bool): Take log-softmax rather than regular softmax.
-            E.g., some PyTorch functions such as `F.nll_loss` expect log-softmax.
-    Returns:
-        probs (torch.Tensor): Result of taking masked softmax over the logits.
-    """
-    mask = mask.type(torch.float32)
-    masked_logits = mask * logits + (1 - mask) * -1e30
-    softmax_fn = F.log_softmax if log_softmax else F.softmax
-    probs = softmax_fn(masked_logits, dim)
-
-    return probs
-
-
-def convert_tokens(eval_dict, qa_id, y_start_list, y_end_list, no_answer):
-    """Convert predictions to tokens from the context.
-
-    Args:
-        eval_dict (dict): Dictionary with eval info for the dataset. This is
-            used to perform the mapping from IDs and indices to actual text.
-        qa_id (int): List of QA example IDs.
-        y_start_list (list): List of start predictions.
-        y_end_list (list): List of end predictions.
-        no_answer (bool): Questions can have no answer. E.g., SQuAD 2.0.
-
-    Returns:
-        pred_dict (dict): Dictionary index IDs -> predicted answer text.
-        sub_dict (dict): Dictionary UUIDs -> predicted answer text (submission).
-    """
-    pred_dict = {}
-    sub_dict = {}
-    for qid, y_start, y_end in zip(qa_id, y_start_list, y_end_list):
-        context = eval_dict[str(qid)]["context"]
-        spans = eval_dict[str(qid)]["spans"]
-        uuid = eval_dict[str(qid)]["uuid"]
-        if no_answer and (y_start == 0 or y_end == 0):
-            pred_dict[str(qid)] = ''
-            sub_dict[uuid] = ''
-        else:
-            if no_answer:
-                y_start, y_end = y_start - 1, y_end - 1
-            start_idx = spans[y_start][0]
-            end_idx = spans[y_end][1]
-            pred_dict[str(qid)] = context[start_idx: end_idx]
-            sub_dict[uuid] = context[start_idx: end_idx]
-    return pred_dict, sub_dict
-
-
 def mean_quadratic_weighted_kappa(kappas, weights=None):
     """
     Calculates the mean of the quadratic
@@ -677,7 +526,7 @@ def visualize(tbx, essay_ids, rater_1, rater_2, num_visuals, step, split='dev'):
                 + f'- **Gold - Rater 2:** {gold_rater2}\n'
                 + f'- **Predicted - Rater 2:** {rater2}'
         )
-        tbx.add_text(tag=f'{split}/{i+1}_of_{num_visuals}',
+        tbx.add_text(tag=f'{split}/{i + 1}_of_{num_visuals}',
                      text_string=tbl_fmt,
                      global_step=step)
     print(x)

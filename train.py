@@ -3,38 +3,33 @@
 Author:
     Angad Sethi
 """
+import random
+from collections import OrderedDict
+from json import dumps
+from typing import Tuple
 
 import numpy as np
-import random
-
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as sched
 import torch.utils.data as data
-import torchtext.vocab
 from sklearn.model_selection import train_test_split
-
-import util
-
-from args import get_train_args
-from collections import OrderedDict
-from json import dumps
 from tensorboardX import SummaryWriter
+from torchtext.vocab import GloVe
 from tqdm.auto import tqdm
 from ujson import load as json_load
-from util import quadratic_weighted_kappa
-import pandas as pd
-from torchtext.vocab import GloVe
 
-from bidaf.dataset import BiDAFDataset, collate_fn as collate_fn_bidaf
-from han.dataset import HANDataset, collate_fn as collate_fn_han
+import util
+from args import get_train_args
 from bert.dataset import BertDataset, collate_fn as collate_fn_bert
-
-from han.model import HierarchicalAttentionNetwork
 from bert.model import BERT
+from bidaf.dataset import BiDAFDataset, collate_fn as collate_fn_bidaf
 from bidaf.model import BiDAF
-import matplotlib.pyplot as plt
+from han.dataset import HANDataset, collate_fn as collate_fn_han
+from han.model import HierarchicalAttentionNetwork
+from util import quadratic_weighted_kappa
 
 
 def main(args):
@@ -42,6 +37,8 @@ def main(args):
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
     log = util.get_logger(args.save_dir, args.name)
     tbx = SummaryWriter(args.save_dir)
+
+    # If you need to disable GPU support, just comment out the following line.
     device, args.gpu_ids = util.get_available_devices()
     # device, args.gpu_ids = 'cpu', []
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
@@ -75,8 +72,9 @@ def main(args):
         encoding='latin-1'
     )
 
-    vocab = torchtext.vocab.GloVe()
-
+    # This is completely unnecessary, since all the papers on AES systems report QWK scores on individual prompts,
+    # but if the user wants, they can disable that method of evaluation, and instead just randomly select a train and
+    # test set from the entire dataset.
     if not args.train_split:
         train_dataset, dev_dataset = train_test_split(dataset, test_size=0.2, random_state=args.seed)
     else:
@@ -86,6 +84,9 @@ def main(args):
                                     random_state=args.seed)
             train_dataset = pd.concat([train_dataset, t])
             dev_dataset = pd.concat([dev_dataset, d])
+
+    # The following code fragment decided which model will be trained, depending on the command line argument.
+    # This will also decide which dataset to use.
 
     if args.model == 'bert':
         train_dataset = BertDataset(
@@ -161,9 +162,11 @@ def main(args):
         collate_fn=collate_fn
     )
 
+    # Dispatch jobs to multiple GPUs, if available.
     if len(args.gpu_ids) > 0:
         model = nn.DataParallel(model, args.gpu_ids)
 
+    # Load weights from a folder.
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model, step = util.load_model(model, args.load_path, args.gpu_ids)
@@ -210,7 +213,7 @@ def main(args):
 
                 # Backward
                 loss_op.backward()
-                # nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                 optimizer.step()
                 scheduler.step()
 
@@ -243,7 +246,7 @@ def main(args):
                         tbx.add_scalar(f'dev/{k}', v, step)
 
 
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader: data.DataLoader, device: str) -> Tuple[OrderedDict, OrderedDict]:
     mse_meter = util.AverageMeter()
     qwk_meter_rater_1 = util.AverageMeter()
     model.eval()
@@ -264,23 +267,21 @@ def evaluate(model, data_loader, device):
             loss_val = loss_op.item()
             mse_meter.update(loss_val, batch_size)
 
+            # Scaling values back, using min and max for this prompt
             predictions = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * predictions)
             scores_domain1 = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * inputs['scores'])
 
+            # This is the new way of reporting scores. Yields much higher QWK than normal, because the spread of scores
+            # increases dramatically.
             quadratic_kappa_1 = quadratic_weighted_kappa(
-                torch.round(predictions).type(torch.int8).tolist(),
-                torch.round(scores_domain1).type(torch.int8).tolist(),
+                torch.round(predictions).type(torch.IntTensor).tolist(),
+                torch.round(scores_domain1).type(torch.IntTensor).tolist(),
                 min_rating=0,
                 max_rating=60
             )
 
             qwk_meter_rater_1.update(quadratic_kappa_1, batch_size)
             pred_dict = dict(zip(inputs['essay_ids'].tolist(), predictions.tolist()))
-            # for id, pred in zip(inputs['essay_ids'].tolist(), predictions.tolist()):
-            #     if id not in pred_dict.keys():
-            #         pred_dict[id] = [pred]
-            #     else:
-            #         pred_dict[id].append(pred)
 
             # Log info
             progress_bar.update(batch_size)
@@ -290,7 +291,10 @@ def evaluate(model, data_loader, device):
     final_dict = {}
 
     true = data_loader.dataset.domain1_scores_raw
+    # Display a table, with randomly selected essays, and their corresponding predictions.
     util.visualize_table(list(pred_dict.keys()), list(pred_dict.values()), 5)
+
+    # Sort the predictions using the essay set as a key.
     for s in pred_dict.keys():
         index = data_loader.dataset.essay_ids.index(s)
         essay_s = data_loader.dataset.essay_sets[index]
@@ -303,6 +307,8 @@ def evaluate(model, data_loader, device):
     result_dict = {}
     m_sum = 0.0
     m_len = 0
+
+    # Final Reporting: Report QWK for each essay set.
     for i in range(1, 9):
         if str(i) in final_dict.keys():
             result_dict['essay_set_' + str(i)] = quadratic_weighted_kappa(final_dict[str(i)][0], final_dict[str(i)][1],

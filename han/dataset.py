@@ -1,8 +1,8 @@
-import torch
-from torch.utils.data import Dataset
 import pandas as pd
+import torch
 import torchtext
 from nltk.tokenize import sent_tokenize
+from torch.utils.data import Dataset
 
 
 class HANDataset(Dataset):
@@ -20,8 +20,8 @@ class HANDataset(Dataset):
         self.en_tokenizer = torchtext.data.get_tokenizer('spacy')
 
         self.domain1_scores = [(score - prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) / (
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
                                enumerate(self.domain1_scores)]
 
         self.max_sent_length = max_sent_length
@@ -37,7 +37,8 @@ class HANDataset(Dataset):
 
         essay = self.essays[index]
         encoded_x = [[self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-             self.en_tokenizer(parts)[:self.max_sent_length]] for parts in sent_tokenize(essay)[:self.max_doc_length]]
+                      self.en_tokenizer(parts)[:self.max_sent_length]] for parts in
+                     sent_tokenize(essay)[:self.max_doc_length]]
 
         score1 = self.domain1_scores[index]
         num_sents = len(encoded_x)

@@ -1,21 +1,25 @@
-import numpy as np
+"""Obsolete Now. Datasets are now available in modules corresponding to the type of model.
 
-import torch
-from torch.utils.data import Dataset
-import pandas as pd
-from tqdm.auto import tqdm
-from transformers import BertTokenizerFast
-import torchtext
-from typing import Tuple
+Author:
+    Angad Sethi
+"""
 import os
-from torch.nn.utils.rnn import pad_sequence
+from typing import Tuple
+
+import numpy as np
+import pandas as pd
+import torch
+import torchtext
 from nltk.tokenize import sent_tokenize
-from spacy.lang.en import English
+from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset
+from transformers import BertTokenizerFast
 
 
 class EssayDataset(Dataset):
     def __init__(self, dataset: pd.DataFrame, max_seq_length: int, max_query_length: int, doc_stride: int,
-                 prompts: dict, total_seq_length: int, max_doc_length: int, max_sent_length: int, model: str = 'bert', bert_model: str = 'bert-base-uncased', train: bool = True):
+                 prompts: dict, total_seq_length: int, max_doc_length: int, max_sent_length: int, model: str = 'bert',
+                 bert_model: str = 'bert-base-uncased', train: bool = True):
         self.datalist = dataset.drop(['domain1_score', 'domain2_score'], axis=1)
         self.domain1_scores = dataset['domain1_score'].tolist()
         self.domain1_scores_raw = dataset['domain1_score'].tolist()
@@ -46,8 +50,8 @@ class EssayDataset(Dataset):
         )
 
         self.domain1_scores = [(score - prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) / (
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
                                enumerate(self.domain1_scores)]
 
         self.model = model
@@ -110,10 +114,11 @@ class EssayDataset(Dataset):
         essay = self.essays[index]
         if self.model == 'han':
             encoded_x = [[self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-                 self.en_tokenizer(parts)[:self.max_sent_length]] for parts in sent_tokenize(essay)[:self.max_doc_length]]
+                          self.en_tokenizer(parts)[:self.max_sent_length]] for parts in
+                         sent_tokenize(essay)[:self.max_doc_length]]
         else:
             encoded_x = [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-                           self.en_tokenizer(essay)[:self.total_seq_length]]
+                         self.en_tokenizer(essay)[:self.total_seq_length]]
 
         score1 = self.domain1_scores[overflow_mapping]
         num_sents, num_words = 0, 0
@@ -174,7 +179,7 @@ def collate_fn(examples):
     essay_sets = torch.tensor(essay_sets, dtype=torch.long)
     essays_bert = torch.tensor(essays_bert, dtype=torch.long)
     masks = torch.tensor(masks, dtype=torch.bool)
-    sentence_lengths = torch.zeros((batch_size, ))
+    sentence_lengths = torch.zeros((batch_size,))
     if isinstance(essays_bidaf[0][0], list):
         essays_bidaf = torch.zeros((batch_size, max_num_sents, max_num_words))
         for doc_id, doc in enumerate(essays_bidaf):

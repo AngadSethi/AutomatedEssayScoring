@@ -16,5 +16,10 @@ dependencies:
   - urllib3
   - pytorch
   - pandas
+  - transformers
+  - scikit-learn
+  - torchtext
+  - matplotlib
+  - nltk
   - pip:
-    - torch
+      - torch

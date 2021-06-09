@@ -1,6 +1,7 @@
-import torch.nn as nn
-import layers
 import torch
+import torch.nn as nn
+
+import layers
 
 
 class BiDAF(nn.Module):
@@ -23,6 +24,7 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
+
     def __init__(self, hidden_size, seq_len, vocab, drop_prob=0.):
         super(BiDAF, self).__init__()
         self.emb = layers.Embedding(vocab=vocab)
@@ -47,16 +49,16 @@ class BiDAF(nn.Module):
         q_mask = torch.zeros_like(prompts) != prompts
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
 
-        c_emb = self.emb(x)         # (batch_size, c_len, hidden_size)
-        q_emb = self.emb(prompts)         # (batch_size, q_len, hidden_size)
+        c_emb = self.emb(x)  # (batch_size, c_len, hidden_size)
+        q_emb = self.emb(prompts)  # (batch_size, q_len, hidden_size)
 
-        c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
-        q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
+        c_enc = self.enc(c_emb, c_len)  # (batch_size, c_len, 2 * hidden_size)
+        q_enc = self.enc(q_emb, q_len)  # (batch_size, q_len, 2 * hidden_size)
 
         att = self.att(c_enc, q_enc,
-                       c_mask, q_mask)    # (batch_size, c_len, 8 * hidden_size)
+                       c_mask, q_mask)  # (batch_size, c_len, 8 * hidden_size)
 
-        mod = self.mod(att, c_len)        # (batch_size, c_len, 2 * hidden_size)
+        mod = self.mod(att, c_len)  # (batch_size, c_len, 2 * hidden_size)
 
         out = self.out(att, mod)
 

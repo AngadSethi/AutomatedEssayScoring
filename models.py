@@ -3,12 +3,10 @@
 Author:
     Angad Sethi
 """
-import torchtext.vocab
+
+import torch.nn as nn
 
 import layers
-import torch
-import torch.nn as nn
-import transformers
 
 
 class Ensemble(nn.Module):
@@ -29,7 +27,3 @@ class Ensemble(nn.Module):
             output_1 = self.bert(essays_bert, masks)
             output_2 = self.bidaf(essays_bidaf, prompts)
         return self.out(output_1, output_2)
-
-
-
-

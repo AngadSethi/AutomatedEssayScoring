@@ -1,10 +1,11 @@
-import torch
-from torch.utils.data import Dataset
-import pandas as pd
-from tqdm.auto import tqdm
-import torchtext
 import os
+
+import pandas as pd
+import torch
+import torchtext
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset
+from tqdm.auto import tqdm
 
 
 class BiDAFDataset(Dataset):
@@ -22,8 +23,8 @@ class BiDAFDataset(Dataset):
         self.en_tokenizer = torchtext.data.get_tokenizer('spacy')
 
         self.domain1_scores = [(score - prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) / (
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
-                    prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
+                prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
                                enumerate(self.domain1_scores)]
 
         self.x_encoded_bidaf_list = []
@@ -35,8 +36,9 @@ class BiDAFDataset(Dataset):
         save_essays = os.path.join('data', s + 'essays_tlen_' + str(seq_len) + '.pt')
         for i in range(1, 9):
             prompt = self.prompts[str(i)]
-            ans = torch.LongTensor([self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-                   self.en_tokenizer(prompt['prompt'])])
+            ans = torch.LongTensor(
+                [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
+                 self.en_tokenizer(prompt['prompt'])])
             self.prompt_encoded_bidaf_list.append(ans)
         self.prompt_encoded_bidaf_list = pad_sequence(self.prompt_encoded_bidaf_list, batch_first=True)
 
@@ -46,8 +48,9 @@ class BiDAFDataset(Dataset):
             for essay in tqdm(self.datalist['essay'], total=len(self.datalist['essay']), desc="Tokenizing Essays"):
                 ans = torch.zeros(seq_len, dtype=torch.long)
                 tokens = self.en_tokenizer(essay)[:seq_len]
-                ans[:len(tokens)] = torch.LongTensor([self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-                       tokens])
+                ans[:len(tokens)] = torch.LongTensor(
+                    [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
+                     tokens])
                 self.x_encoded_bidaf_list.append(ans)
             self.x_encoded_bidaf_list = torch.stack(self.x_encoded_bidaf_list)
             torch.save(self.x_encoded_bidaf_list, save_essays)

@@ -1,6 +1,6 @@
+import torch
 import torch.nn as nn
 import transformers
-import torch
 
 
 class BERT(nn.Module):

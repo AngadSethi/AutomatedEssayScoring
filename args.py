@@ -1,7 +1,7 @@
-"""Command-line arguments for setup.py, train.py, test.py.
+"""Command-line arguments for train.py
 
 Author:
-    Angad Sethi
+    Angad Sethi (angadsethi_2k18co-66@dtu.ac.in)
 """
 
 import argparse
@@ -11,8 +11,74 @@ def get_train_args():
     """Get arguments needed in train.py."""
     parser = argparse.ArgumentParser('Train a model to score essays in an automated pipeline.')
 
-    add_train_test_args(parser)
-
+    parser.add_argument('--train_split',
+                        type=bool,
+                        default=False,
+                        help='Should the essays be split according to essay sets')
+    parser.add_argument('--num_workers',
+                        type=int,
+                        default=4,
+                        help='Number of sub-processes to use per data loader.')
+    parser.add_argument('--save_dir',
+                        type=str,
+                        default='./save/',
+                        help='Base directory for saving information.')
+    parser.add_argument('--batch_size',
+                        type=int,
+                        default=32,
+                        help='Batch size per GPU. Scales automatically when \
+                              multiple GPUs are available.')
+    parser.add_argument('--hidden_size',
+                        type=int,
+                        default=100,
+                        help='Number of features in encoder hidden layers.')
+    parser.add_argument('--load_path',
+                        type=dict,
+                        default=None,
+                        help='Path to load as a model checkpoint.')
+    parser.add_argument('--max_seq_length',
+                        type=int,
+                        default=1024,
+                        help='The maximum sequence length that is provided to the model.')
+    parser.add_argument('--doc_stride',
+                        type=int,
+                        default=32,
+                        help='The doc stride for the context')
+    parser.add_argument('--max_query_length',
+                        type=int,
+                        default=128,
+                        help='The maximum length of the query')
+    parser.add_argument('--max_doc_length',
+                        type=int,
+                        default=1000,
+                        help='The maximum number of the sentences involved in the document.')
+    parser.add_argument('--max_sent_length',
+                        type=int,
+                        default=100,
+                        help='The maximum length of the sentences involved in the document.')
+    parser.add_argument('--bert_model',
+                        type=str,
+                        default='bert-base-uncased',
+                        choices=('bert-base-uncased', 'bert-large-uncased'),
+                        help='The type of BERT model used.')
+    parser.add_argument('--model',
+                        type=str,
+                        choices=(
+                        'bert', 'bidaf', 'han', 'bert-bidaf', 'han-bidaf', 'bert-han-bidaf', 'bert-svr', 'bidaf-svr',
+                        'han-svr'),
+                        help='The type of model used.')
+    parser.add_argument('--glove_dim',
+                        type=int,
+                        default=300,
+                        help='Size of GloVe word vectors to use')
+    parser.add_argument('--word_hidden_size',
+                        type=int,
+                        default=50,
+                        help='The hidden size of words, to be used in HAN')
+    parser.add_argument('--sent_hidden_size',
+                        type=int,
+                        default=100,
+                        help='The hidden size of sentences, to be used in HAN')
     parser.add_argument('--lr',
                         type=float,
                         default=0.00001,
@@ -63,73 +129,3 @@ def get_train_args():
         raise ValueError(f'Unrecognized metric name: "{args.metric_name}"')
 
     return args
-
-
-def add_train_test_args(parser):
-    """Add arguments common to train.py and test.py"""
-    parser.add_argument('--train_split',
-                        type=bool,
-                        default=False,
-                        help='Should the essays be split according to essay sets')
-    parser.add_argument('--num_workers',
-                        type=int,
-                        default=4,
-                        help='Number of sub-processes to use per data loader.')
-    parser.add_argument('--save_dir',
-                        type=str,
-                        default='./save/',
-                        help='Base directory for saving information.')
-    parser.add_argument('--batch_size',
-                        type=int,
-                        default=32,
-                        help='Batch size per GPU. Scales automatically when \
-                              multiple GPUs are available.')
-    parser.add_argument('--hidden_size',
-                        type=int,
-                        default=100,
-                        help='Number of features in encoder hidden layers.')
-    parser.add_argument('--load_path',
-                        type=str,
-                        default=None,
-                        help='Path to load as a model checkpoint.')
-    parser.add_argument('--max_seq_length',
-                        type=int,
-                        default=1024,
-                        help='The maximum sequence length that is provided to the model.')
-    parser.add_argument('--doc_stride',
-                        type=int,
-                        default=32,
-                        help='The doc stride for the context')
-    parser.add_argument('--max_query_length',
-                        type=int,
-                        default=128,
-                        help='The maximum length of the query')
-    parser.add_argument('--max_doc_length',
-                        type=int,
-                        default=1000,
-                        help='The maximum number of the sentences involved in the document.')
-    parser.add_argument('--max_sent_length',
-                        type=int,
-                        default=100,
-                        help='The maximum length of the sentences involved in the document.')
-    parser.add_argument('--bert_model',
-                        type=str,
-                        default='bert-base-uncased',
-                        choices=('bert-base-uncased', 'bert-large-uncased'),
-                        help='The type of BERT model used.')
-    parser.add_argument('--model',
-                        type=str,
-                        choices=('bert', 'bidaf', 'han'),
-                        help='The type of model used.')
-    parser.add_argument('--glove_dim',
-                        type=int,
-                        default=300,
-                        help='Size of GloVe word vectors to use')
-    parser.add_argument('--word_hidden_size',
-                        type=int,
-                        default=50,
-                        help='The hidden size of words, to be used in HAN')
-    parser.add_argument('--sent_hidden_size',
-                        type=int,
-                        default=100,
-                        help='The hidden size of sentences, to be used in HAN')
