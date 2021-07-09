@@ -63,9 +63,7 @@ def get_train_args():
                         help='The type of BERT model used.')
     parser.add_argument('--model',
                         type=str,
-                        choices=(
-                        'bert', 'bidaf', 'han', 'bert-bidaf', 'han-bidaf', 'bert-han-bidaf', 'bert-svr', 'bidaf-svr',
-                        'han-svr'),
+                        choices=('bert', 'bidaf', 'han', 'ensemble'),
                         help='The type of model used.')
     parser.add_argument('--glove_dim',
                         type=int,

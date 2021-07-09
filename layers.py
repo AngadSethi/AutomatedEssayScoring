@@ -182,20 +182,25 @@ class BiDAFOutput(nn.Module):
 
     def __init__(self, hidden_size, seq_len):
         super(BiDAFOutput, self).__init__()
-        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
-        self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
-        self.activation_1 = nn.ReLU()
+        # self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        self.mod_linear_1 = nn.Linear(2 * hidden_size * seq_len, 1)
+        # self.activation_1 = nn.ReLU()
         self.activation_2 = nn.Sigmoid()
 
-        self.projection = nn.Linear(seq_len, 1)
+        # self.projection = nn.Linear(seq_len, 1)
 
     def forward(self, att, mod):
         # Shapes: (batch_size, seq_len, 1)
-        logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
-        logits_1 = self.activation_1(logits_1)
-        logits_1 = torch.squeeze(logits_1, -1)
+        # logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
+        # logits_1 = self.activation_1(logits_1)
+        # logits_1 = torch.squeeze(logits_1, -1)
+        #
+        # logits_1 = self.activation_2(self.projection(logits_1))
+        # logits_1 = torch.squeeze(logits_1, -1)
 
-        logits_1 = self.activation_2(self.projection(logits_1))
+        logits_1 = torch.flatten(mod, start_dim=1)
+        logits_1 = self.mod_linear_1(logits_1)
+        logits_1 = self.activation_2(logits_1)
         logits_1 = torch.squeeze(logits_1, -1)
 
         return logits_1

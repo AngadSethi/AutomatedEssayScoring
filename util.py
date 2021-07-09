@@ -101,7 +101,7 @@ class CheckpointSaver:
         if self.log is not None:
             self.log.info(message)
 
-    def save(self, step, model, metric_val, device):
+    def save(self, step, model, metric_val, final_results, final_results_val, final_results_test, device):
         """Save model parameters to disk.
 
         Args:
@@ -122,12 +122,22 @@ class CheckpointSaver:
         torch.save(ckpt_dict, checkpoint_path)
         self._print(f'Saved checkpoint: {checkpoint_path}')
 
+        dataframe = pd.DataFrame(final_results)
+        dataframe_val = pd.DataFrame(final_results_val)
+        dataframe_test = pd.DataFrame(final_results_test)
+
         if self.is_best(metric_val):
             # Save the best model
             self.best_val = metric_val
             best_path = os.path.join(self.save_dir, 'best.pth.tar')
+            best_result = os.path.join(self.save_dir, 'best_train.csv')
+            best_result_val = os.path.join(self.save_dir, 'best_val.csv')
+            best_result_test = os.path.join(self.save_dir, 'best_test.csv')
             shutil.copy(checkpoint_path, best_path)
             self._print(f'New best checkpoint at step {step}...')
+            dataframe.to_csv(best_result, index=False)
+            dataframe_val.to_csv(best_result_val, index=False)
+            dataframe_test.to_csv(best_result_test, index=False)
 
         # Add checkpoint path to priority queue (lowest priority removed first)
         if self.maximize_metric:
@@ -172,6 +182,28 @@ def load_model(model, checkpoint_path, gpu_ids, return_step=True):
         return model, step
 
     return model
+
+
+def get_save_dir(base_dir, name, training, id_max=100):
+    """Get a unique save directory by appending the smallest positive integer
+    `id < id_max` that is not already taken (i.e., no dir exists with that id).
+    Args:
+        base_dir (str): Base directory in which to make save directories.
+        name (str): Name to identify this training run. Need not be unique.
+        training (bool): Save dir. is for training (determines subdirectory).
+        id_max (int): Maximum ID number before raising an exception.
+    Returns:
+        save_dir (str): Path to a new directory with a unique name.
+    """
+    for uid in range(1, id_max):
+        subdir = 'train' if training else 'test'
+        save_dir = os.path.join(base_dir, subdir, f'{name}-{uid:02d}')
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+            return save_dir
+
+    raise RuntimeError('Too many save directories created with the same name. \
+                       Delete old save directories or use another name.')
 
 
 def get_available_devices():

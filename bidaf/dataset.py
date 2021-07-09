@@ -9,7 +9,7 @@ from tqdm.auto import tqdm
 
 
 class BiDAFDataset(Dataset):
-    def __init__(self, dataset: pd.DataFrame, prompts: dict, seq_len: int, train: bool = True):
+    def __init__(self, dataset: pd.DataFrame, prompts: dict, seq_len: int, mode: str = 'train'):
         self.datalist = dataset.drop(['domain1_score', 'domain2_score'], axis=1)
         self.domain1_scores = dataset['domain1_score'].tolist()
         self.domain1_scores_raw = dataset['domain1_score'].tolist()
@@ -31,9 +31,7 @@ class BiDAFDataset(Dataset):
 
         self.prompt_encoded_bidaf_list = []
 
-        s = 'train_' if train else 'dev_'
-
-        save_essays = os.path.join('data', s + 'essays_tlen_' + str(seq_len) + '.pt')
+        save_essays = os.path.join('data', mode + 'essays_tlen_' + str(seq_len) + '.pt')
         for i in range(1, 9):
             prompt = self.prompts[str(i)]
             ans = torch.LongTensor(
