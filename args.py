@@ -114,6 +114,25 @@ def get_train_args():
                         type=int,
                         default=1000,
                         help='Number of steps till evaluation')
+    parser.add_argument('--cuda',
+                        type=bool,
+                        default=True,
+                        help='A flag to disable CUDA support')
+    parser.add_argument('--ensemble_model_1',
+                        type=str,
+                        default='',
+                        help='The folder where the train, val, and test results are saved. Assuming the files are '
+                             'prefixed with best_')
+    parser.add_argument('--ensemble_model_2',
+                        type=str,
+                        default='',
+                        help='The folder where the train, val, and test results are saved. Assuming the files are '
+                             'prefixed with best_')
+    parser.add_argument('--ensemble_model_3',
+                        type=str,
+                        default='',
+                        help='The folder where the train, val, and test results are saved. Assuming the files are '
+                             'prefixed with best_')
 
     args, _ = parser.parse_known_args()
 

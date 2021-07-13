@@ -3,9 +3,11 @@
 Author:
     Angad Sethi
 """
+import argparse
 import random
 from collections import OrderedDict
 from json import dumps
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -33,13 +35,25 @@ from han.model import HierarchicalAttentionNetwork
 from util import quadratic_weighted_kappa
 
 
-def main(args):
+def main(args: argparse.Namespace):
+    """
+    Does everything. Trains the model, evaluates it, saves the model which delivers best performance on the dev set,
+    and reports back test scores. Most of the features depend on the args object. Refer to the args documentation for
+    the same
+
+    Args:
+        args (argsparse.Namespace): The args namespace dictating everything - from choice of model to the dataset.
+    """
     # Set up logging and devices
     args.save_dir = util.get_save_dir(args.save_dir, args.name, training=True)
     log = util.get_logger(args.save_dir, args.name)
     tbx = SummaryWriter(args.save_dir)
-    device, args.gpu_ids = util.get_available_devices()
-    # device, args.gpu_ids = 'cpu', []
+
+    # Enabling or disabling CUDA support
+    if args.cuda:
+        device, args.gpu_ids = util.get_available_devices()
+    else:
+        device, args.gpu_ids = 'cpu', []
     log.info(f'Args: {dumps(vars(args), indent=4, sort_keys=True)}')
     args.batch_size *= max(1, len(args.gpu_ids))
 
@@ -71,18 +85,26 @@ def main(args):
         encoding='latin-1'
     )
 
+    # All papers on AES report scores on all essay prompts individually. So, this flag should not be disabled
+    # But in the interest of increasing randomness, this flag can be disabled, and then train, dev, and test sets
+    # will be randomly sampled from the entire pool.
     if not args.train_split:
         train_dataset, dev_dataset = train_test_split(dataset, test_size=0.2, random_state=args.seed)
         dev_dataset, test_dataset = train_test_split(dev_dataset, test_size=0.5, random_state=args.seed)
     else:
         train_dataset, dev_dataset, test_dataset = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        # There are eight essay prompts in total.
         for x in range(1, 9):
+            # Train - 80%, Dev - 10%, Test - 10%
+            # Dev and test sets contain essays from all prompts, to report QWK scores on each prompt set.
             t, d = train_test_split(dataset[dataset['essay_set'] == x], test_size=0.2, random_state=args.seed)
             d, test = train_test_split(d, test_size=0.5, random_state=args.seed)
             train_dataset = pd.concat([train_dataset, t])
             dev_dataset = pd.concat([dev_dataset, d])
             test_dataset = pd.concat([test_dataset, test])
 
+    # If the user wants to train a BERT model, use the BERT dataset and the BERT model. The optimizer is the same as the
+    # one described in the BERT paper. Learning rate can be adjusted. The same applies for all other models
     if args.model == 'bert':
         train_dataset = BertDataset(
             train_dataset,
@@ -166,28 +188,31 @@ def main(args):
         optimizer = optim.SGD(params=filter(lambda x: x.requires_grad, model.parameters()), lr=args.lr, momentum=0.9,
                               weight_decay=args.l2_wd)
     else:
+        # Load the CSV files with all the predictions of the models. For convenience, the files are already split
+        # into train, dev, and test sets
         train_dataset = EnsembleDataset(
             train_dataset,
             prompts=prompts,
-            files=['han/best_train.csv', 'bidaf/best_train.csv', 'bert/best_train.csv']
+            files=util.load_csv(args)
         )
         dev_dataset = EnsembleDataset(
             dev_dataset,
             prompts=prompts,
-            files=['han/best_val.csv', 'bidaf/best_val.csv', 'bert/best_val.csv']
+            files=util.load_csv(args, mode='val')
         )
         test_dataset = EnsembleDataset(
             test_dataset,
             prompts=prompts,
-            files=['han/best_test.csv', 'bidaf/best_test.csv', 'bert/best_test.csv']
+            files=util.load_csv(args, mode='test')
         )
         model = Ensemble(
-            num_models=3
+            num_models=len(util.load_csv(args))
         )
         collate_fn = collate_fn_ensemble
         optimizer = optim.Adam(params=filter(lambda x: x.requires_grad, model.parameters()), lr=args.lr,
                                weight_decay=args.l2_wd)
 
+    # The train data loader
     train_loader = data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -196,6 +221,7 @@ def main(args):
         collate_fn=collate_fn
     )
 
+    # The dev data loader
     dev_loader = data.DataLoader(
         dev_dataset,
         batch_size=args.batch_size,
@@ -204,6 +230,7 @@ def main(args):
         collate_fn=collate_fn
     )
 
+    # The test data loader
     test_loader = data.DataLoader(
         test_dataset,
         batch_size=args.batch_size,
@@ -212,9 +239,11 @@ def main(args):
         collate_fn=collate_fn
     )
 
+    # Create and send training jobs to more than one GPU.
     if len(args.gpu_ids) > 0:
         model = nn.DataParallel(model, args.gpu_ids)
 
+    # Resume model training from a checkpoint
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model, step = util.load_model(model, args.load_path, args.gpu_ids)
@@ -246,6 +275,7 @@ def main(args):
     steps_till_eval = args.eval_steps
     while epoch != args.num_epochs:
         epoch += 1
+        # To save hte results of this epoch
         final_result = {
             'id': [],
             'result': []
@@ -262,11 +292,14 @@ def main(args):
                 loss_op = loss(predictions, inputs['scores'])
                 loss_val = loss_op.item()
 
+                # Saving the predictions of this model
                 final_result['id'].extend(inputs['essay_ids'].tolist())
                 final_result['result'].extend(predictions.tolist())
 
                 # Backward
                 loss_op.backward()
+
+                # Gradient Clipping
                 nn.utils.clip_grad_norm_(filter(lambda x : x.requires_grad, model.parameters()), args.max_grad_norm)
                 optimizer.step()
                 scheduler.step()
@@ -276,6 +309,8 @@ def main(args):
                 steps_till_eval -= batch_size
                 progress_bar.update(batch_size)
                 progress_bar.set_postfix(epoch=epoch, MSE=loss_val)
+
+                # Logging in TensorBoard
                 tbx.add_scalar('train/MSE', loss_val, step)
                 tbx.add_scalar('train/LR',
                                optimizer.param_groups[0]['lr'],
@@ -295,10 +330,14 @@ def main(args):
         for k, v in results.items():
             tbx.add_scalar(f'dev/{k}', v, step)
 
+        # A misconception might be that we are optimising over the test set. That is not the case.
+        # We pick the test results of the model which performs best on the dev set, irrespective of the fact that
+        # there might be a model which performs better on the test set.
         log.info(f'Testing')
         results_test, pred_dict_test, final_result_test = evaluate(model, test_loader, device)
 
         saver.save(step, model, results[args.metric_name], final_result, final_result_val, final_result_test, device)
+        util.mock_run(model, args, prompts)
 
         # Log to console
         results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results_test.items())
@@ -312,10 +351,28 @@ def main(args):
             tbx.add_scalar(f'test/{k}', v, step)
 
 
-def evaluate(model, data_loader, device):
+def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tuple[OrderedDict, OrderedDict, dict]:
+    """
+    Evaluate the model on the given data loader, after turning on the eval mode of the model. Returns a tuple with all
+    the computed metrics, and the dictionary of the final predictions.
+    Args:
+        model (nn.Module): The model which is to be evaluated.
+        data_loader (data.DataLoader): The data on which the model will be evaluated.
+        device (str): The device on which the tensors are to be stored.
+
+    Returns:
+        results (OrderedDict): A dictionary with MSE, QWK and QWK_OVERALL.
+        result_dict (OrderedDict): A dictionary with the QWK scores of each essay prompt.
+        final_result (dict): A dictionary with two keys: id and result. Contains the final predictions of the model on
+        the dataset.
+    """
+
+    # Meters with the average metrics.
     mse_meter = util.AverageMeter()
     qwk_meter_rater_1 = util.AverageMeter()
     model.eval()
+
+    # Loss function. Not to back propagate, but to report back the error.
     loss = nn.MSELoss()
     pred_dict = {}
     final_result = {
@@ -333,16 +390,23 @@ def evaluate(model, data_loader, device):
             # Forward
             predictions = model(**inputs)
             predictions = torch.squeeze(predictions, dim=-1)
+
+            # Compute loss.
             loss_op = loss(predictions, inputs['scores'])
             loss_val = loss_op.item()
+
+            # Update the meter.
             mse_meter.update(loss_val, batch_size)
 
+            # Compute the final results.
             final_result['id'].extend(inputs['essay_ids'].tolist())
             final_result['result'].extend(predictions.tolist())
 
+            # Scale back the final results.
             predictions = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * predictions)
             scores_domain1 = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * inputs['scores'])
 
+            # Compute QWK on the entire dataset irrespective of the essay prompt.
             quadratic_kappa_1 = quadratic_weighted_kappa(
                 torch.round(predictions).type(torch.LongTensor).tolist(),
                 torch.round(scores_domain1).type(torch.LongTensor).tolist(),
@@ -350,6 +414,7 @@ def evaluate(model, data_loader, device):
                 max_rating=60
             )
 
+            # Update the meter.
             qwk_meter_rater_1.update(quadratic_kappa_1, batch_size)
             pred_dict.update(dict(zip(inputs['essay_ids'].tolist(), predictions.tolist())))
 
@@ -357,10 +422,14 @@ def evaluate(model, data_loader, device):
             progress_bar.update(batch_size)
             progress_bar.set_postfix(MSE=mse_meter.avg, QWK=qwk_meter_rater_1.avg)
 
+    # Switch back to training mode.
     model.train()
     final_dict = {}
 
+    # Get the true scores (unscaled)
     true = data_loader.dataset.domain1_scores_raw
+
+    # For each essay prompt add the prediction to the corresponding list
     for s in pred_dict.keys():
         index = data_loader.dataset.essay_ids.index(s)
         essay_s = data_loader.dataset.essay_sets[index]
@@ -370,6 +439,7 @@ def evaluate(model, data_loader, device):
             final_dict[str(essay_s)][0].append(round(pred_dict[s]))
             final_dict[str(essay_s)][1].append(true[index])
 
+    # Create a dictionary with the QWK scores of each prompt.
     result_dict = {}
     m_sum = 0.0
     m_len = 0
@@ -383,6 +453,7 @@ def evaluate(model, data_loader, device):
             m_sum += result_dict['essay_set_' + str(i)]
             m_len += 1
 
+    # Compute the average QWK.
     result_dict['avg'] = m_sum / m_len
 
     results_list = [

@@ -1,4 +1,5 @@
 import os
+from typing import Tuple, List
 
 import pandas as pd
 import torch
@@ -10,6 +11,15 @@ from tqdm.auto import tqdm
 
 class BiDAFDataset(Dataset):
     def __init__(self, dataset: pd.DataFrame, prompts: dict, seq_len: int, mode: str = 'train'):
+        """
+        Initiate the BiDAF dataset with the appropriate arguments. Appropriate for a PyTorch dataset.
+
+        Args:
+            dataset (pd.DataFrame): The pandas dataframe with the train examples.
+            prompts (dict): The dictionary with the prompts, the min and max scores.
+            seq_len (int): The maximum length of the sequence allowed. Please keep in mind the memory limitations.
+            mode (str): The mode of training (train, dev, or test).
+        """
         self.datalist = dataset.drop(['domain1_score', 'domain2_score'], axis=1)
         self.domain1_scores = dataset['domain1_score'].tolist()
         self.domain1_scores_raw = dataset['domain1_score'].tolist()
@@ -19,9 +29,13 @@ class BiDAFDataset(Dataset):
         self.essay_sets = self.datalist['essay_set'].tolist()
         self.essays = self.datalist['essay'].tolist()
 
+        # Download or retrieve the vocabulary.
         self.vocab = torchtext.vocab.GloVe()
+
+        # Get the sPacy tokenizer.
         self.en_tokenizer = torchtext.data.get_tokenizer('spacy')
 
+        # Scale the domain scores using the minimum and maximum scores.
         self.domain1_scores = [(score - prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) / (
                 prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['max_score'] -
                 prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
@@ -31,6 +45,7 @@ class BiDAFDataset(Dataset):
 
         self.prompt_encoded_bidaf_list = []
 
+        # This is an intensive process, so we want to run it once. We do that and save the results as a tensor.
         save_essays = os.path.join('data', mode + 'essays_tlen_' + str(seq_len) + '.pt')
         for i in range(1, 9):
             prompt = self.prompts[str(i)]
@@ -40,6 +55,7 @@ class BiDAFDataset(Dataset):
             self.prompt_encoded_bidaf_list.append(ans)
         self.prompt_encoded_bidaf_list = pad_sequence(self.prompt_encoded_bidaf_list, batch_first=True)
 
+        # This is an intensive process, so we want to run it once. We do that and save the results as a tensor.
         if os.path.exists(save_essays):
             self.x_encoded_bidaf_list = torch.load(save_essays)
         else:
@@ -56,7 +72,16 @@ class BiDAFDataset(Dataset):
         self.prompt_encoded_bidaf = self.prompt_encoded_bidaf_list.tolist()
         self.x_encoded_bidaf = self.x_encoded_bidaf_list.tolist()
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> Tuple[int, int, List[int], List[int], float, int, int]:
+        """
+        Overriding the __getitem__ method of the PyTorch Dataset class.
+
+        Args:
+            index (int): The index of the record to be rendered in the dataset.
+
+        Returns:
+            dataitem (Tuple[int, int, List[int], List[int], float, int, int])
+        """
         essay_id = self.essay_ids[index]
         essay_set = self.essay_sets[index]
         prompt = self.prompts.get(str(essay_set))
@@ -82,10 +107,24 @@ class BiDAFDataset(Dataset):
         return dataitem
 
     def __len__(self) -> int:
+        """
+        The number of examples in the dataset
+
+        Returns:
+            length (int): The number of examples.
+        """
         return len(self.essay_ids)
 
 
 def collate_fn(examples):
+    """
+    Collate the data items and return a dictionary with the parameters necessary to train or evaluate the model.
+    Normally passed as a parameter to the DataLoader.
+
+    Args:
+        examples: The list of examples to be collated.
+
+    """
     essay_ids = []
     essay_sets = []
     essays_bidaf = []
@@ -104,12 +143,12 @@ def collate_fn(examples):
         max_scores_domain1.append(domain1_max_score)
 
     essay_ids = torch.LongTensor(essay_ids)
-    essay_sets = torch.tensor(essay_sets, dtype=torch.long)
-    essays_bidaf = torch.tensor(essays_bidaf, dtype=torch.long)
-    prompts = torch.tensor(prompts, dtype=torch.long)
-    scores_domain1 = torch.tensor(scores_domain1, dtype=torch.float)
-    min_scores_domain1 = torch.tensor(min_scores_domain1, dtype=torch.long)
-    max_scores_domain1 = torch.tensor(max_scores_domain1, dtype=torch.long)
+    essay_sets = torch.LongTensor(essay_sets)
+    essays_bidaf = torch.LongTensor(essays_bidaf)
+    prompts = torch.LongTensor(prompts)
+    scores_domain1 = torch.FloatTensor(scores_domain1)
+    min_scores_domain1 = torch.LongTensor(min_scores_domain1)
+    max_scores_domain1 = torch.LongTensor(max_scores_domain1)
 
     return {
         'essay_ids': essay_ids,

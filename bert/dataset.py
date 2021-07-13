@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
@@ -5,8 +7,21 @@ from transformers import BertTokenizerFast
 
 
 class BertDataset(Dataset):
+    """
+    The dataset for the BERT model. To be used only when training the BERT model, since BERT uses a different tokenizer.
+    """
     def __init__(self, dataset: pd.DataFrame, max_seq_length: int, doc_stride: int, prompts: dict,
                  bert_model: str = 'bert-base-uncased'):
+        """
+        Initiate the BERT dataset with the appropriate arguments. Appropriate for a PyTorch dataset.
+
+        Args:
+            dataset (pd.DataFrame): The pandas dataframe with the train examples.
+            max_seq_length (int): The maximum length of the sequence allowed. Please keep in mind the memory limitations.
+            doc_stride (int): The overlap between sentences of the same excerpt.
+            prompts (dict): The dictionary with the prompts, the min and max scores.
+            bert_model (str): The string denoting the size of the bert model to be used.
+        """
         self.datalist = dataset.drop(['domain1_score', 'domain2_score'], axis=1)
         self.domain1_scores = dataset['domain1_score'].tolist()
         self.domain1_scores_raw = dataset['domain1_score'].tolist()
@@ -36,7 +51,16 @@ class BertDataset(Dataset):
                 prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) for i, score in
                                enumerate(self.domain1_scores)]
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> Tuple[int, int, List[int], List[int], float, int, int]:
+        """
+        Overriding the __getitem__ method of the PyTorch Dataset class.
+
+        Args:
+            index (int): The index of the record to be rendered in the dataset.
+
+        Returns:
+            dataitem (Tuple[int, int, List[int], List[int], float, int, int])
+        """
         x = self.x_encoded_bert['input_ids'][index]
         mask = self.x_encoded_bert['attention_mask'][index]
         overflow_mapping = index
@@ -65,7 +89,15 @@ class BertDataset(Dataset):
         return len(self.x_encoded_bert['input_ids'])
 
 
-def collate_fn(examples):
+def collate_fn(examples: List[Tuple[int, int, List[int], List[int], float, int, int]]) -> dict:
+    """
+    Collate the data items and return a dictionary with the parameters necessary to train or evaluate the model.
+    Normally passed as a parameter to the DataLoader.
+
+    Args:
+        examples: The list of examples to be collated.
+
+    """
     essay_ids = []
     essay_sets = []
     essays_bert = []
@@ -84,12 +116,12 @@ def collate_fn(examples):
         max_scores_domain1.append(domain1_max_score)
 
     essay_ids = torch.LongTensor(essay_ids)
-    essay_sets = torch.tensor(essay_sets, dtype=torch.long)
-    essays_bert = torch.tensor(essays_bert, dtype=torch.long)
-    masks = torch.tensor(masks, dtype=torch.bool)
-    scores_domain1 = torch.tensor(scores_domain1, dtype=torch.float)
-    min_scores_domain1 = torch.tensor(min_scores_domain1, dtype=torch.long)
-    max_scores_domain1 = torch.tensor(max_scores_domain1, dtype=torch.long)
+    essay_sets = torch.LongTensor(essay_sets)
+    essays_bert = torch.LongTensor(essays_bert)
+    masks = torch.BoolTensor(masks)
+    scores_domain1 = torch.FloatTensor(scores_domain1)
+    min_scores_domain1 = torch.LongTensor(min_scores_domain1)
+    max_scores_domain1 = torch.LongTensor(max_scores_domain1)
 
     return {
         'essay_ids': essay_ids,

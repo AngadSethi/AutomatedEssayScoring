@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import pandas as pd
 import torch
 import torchtext
@@ -7,6 +9,15 @@ from torch.utils.data import Dataset
 
 class HANDataset(Dataset):
     def __init__(self, dataset: pd.DataFrame, prompts: dict, max_doc_length: int, max_sent_length: int):
+        """
+        Initiate the HAN dataset with the appropriate arguments. Appropriate for a PyTorch dataset.
+
+        Args:
+            dataset (pd.DataFrame): The pandas dataframe with the train examples.
+            prompts (dict): The dictionary with the prompts, the min and max scores.
+            max_doc_length (int): The maximum number of sentences allowed in the excerpt.
+            max_sent_length (int): The maxmimum number of tokens in a sentence
+        """
         self.datalist = dataset.drop(['domain1_score', 'domain2_score'], axis=1)
         self.domain1_scores = dataset['domain1_score'].tolist()
         self.domain1_scores_raw = dataset['domain1_score'].tolist()
@@ -27,7 +38,16 @@ class HANDataset(Dataset):
         self.max_sent_length = max_sent_length
         self.max_doc_length = max_doc_length
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> Tuple[int, int, List[List[int]], float, int, int, int, List[int]]:
+        """
+        Overriding the __getitem__ method of the PyTorch Dataset class.
+
+        Args:
+            index (int): The index of the record to be rendered in the dataset.
+
+        Returns:
+            dataitem (Tuple[int, int, List[[List[int]], float, int, int, int, List[int]])
+        """
         essay_id = self.essay_ids[index]
         essay_set = self.essay_sets[index]
         prompt = self.prompts.get(str(essay_set))
@@ -62,6 +82,14 @@ class HANDataset(Dataset):
 
 
 def collate_fn(examples):
+    """
+    Collate the data items and return a dictionary with the parameters necessary to train or evaluate the model.
+    Normally passed as a parameter to the DataLoader.
+
+    Args:
+        examples: The list of examples to be collated.
+
+    """
     essay_ids = []
     essay_sets = []
     essays_bidaf = []

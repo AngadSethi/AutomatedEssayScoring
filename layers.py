@@ -22,9 +22,7 @@ class Embedding(nn.Module):
     Borrowed from https://github.com/chrischute/squad
 
     Args:
-        word_vectors (torch.Tensor): Pre-trained word vectors.
-        hidden_size (int): Size of hidden activations.
-        drop_prob (float): Probability of zero-ing out activations
+        vocab (torch.vocab.GloVe): Pre-trained word vectors.
     """
 
     def __init__(self, vocab: torchtext.vocab.GloVe):
@@ -34,10 +32,6 @@ class Embedding(nn.Module):
 
     def forward(self, x):
         emb = self.embedding(x)  # (batch_size, seq_len, embed_size)
-        # emb = self.lin(emb)
-        # emb = F.dropout(emb, self.drop_prob, self.training)
-        # emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
-        # emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
         return emb
 
@@ -69,7 +63,7 @@ class RNNEncoder(nn.Module):
                            bidirectional=True,
                            dropout=drop_prob if num_layers > 1 else 0.)
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths: torch.Tensor):
         # Save original padded length for use by pad_packed_sequence
         orig_len = x.size(1)
 
@@ -190,13 +184,6 @@ class BiDAFOutput(nn.Module):
         # self.projection = nn.Linear(seq_len, 1)
 
     def forward(self, att, mod):
-        # Shapes: (batch_size, seq_len, 1)
-        # logits_1 = self.att_linear_1(att) + self.mod_linear_1(mod)
-        # logits_1 = self.activation_1(logits_1)
-        # logits_1 = torch.squeeze(logits_1, -1)
-        #
-        # logits_1 = self.activation_2(self.projection(logits_1))
-        # logits_1 = torch.squeeze(logits_1, -1)
 
         logits_1 = torch.flatten(mod, start_dim=1)
         logits_1 = self.mod_linear_1(logits_1)
@@ -260,7 +247,7 @@ class WordLevelAttention(nn.Module):
 
 
 class SentenceLevelAttention(nn.Module):
-    def __init__(self, sent_hidden_size, word_hidden_size, dropout=0.1):
+    def __init__(self, sent_hidden_size: int, word_hidden_size: int, dropout: float = 0.1):
         super(SentenceLevelAttention, self).__init__()
         self.sent_linear = nn.Linear(2 * sent_hidden_size, 2 * sent_hidden_size)
         self.activation = nn.Tanh()

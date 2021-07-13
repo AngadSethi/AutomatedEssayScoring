@@ -5,6 +5,7 @@ Most of the functions here have been borrowed from https://github.com/chrischute
 Author:
     Angad Sethi (angadsethi_2k18co066@dtu.ac.in)
 """
+import argparse
 import json
 import logging
 import math
@@ -17,7 +18,12 @@ import pandas as pd
 import torch
 import tqdm
 from prettytable import PrettyTable
+import torch.nn.functional as F
+from torch.utils import data
 
+from bert.dataset import BertDataset, collate_fn as collate_fn_bert
+from bidaf.dataset import BiDAFDataset, collate_fn as collate_fn_bidaf
+from han.dataset import HANDataset, collate_fn as collate_fn_han
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -564,6 +570,27 @@ def visualize(tbx, essay_ids, rater_1, rater_2, num_visuals, step, split='dev'):
     print(x)
 
 
+def masked_softmax(logits, mask, dim=-1, log_softmax=False):
+    """Take the softmax of `logits` over given dimension, and set
+    entries to 0 wherever `mask` is 0.
+    Args:
+        logits (torch.Tensor): Inputs to the softmax function.
+        mask (torch.Tensor): Same shape as `logits`, with 0 indicating
+            positions that should be assigned 0 probability in the output.
+        dim (int): Dimension over which to take softmax.
+        log_softmax (bool): Take log-softmax rather than regular softmax.
+            E.g., some PyTorch functions such as `F.nll_loss` expect log-softmax.
+    Returns:
+        probs (torch.Tensor): Result of taking masked softmax over the logits.
+    """
+    mask = mask.type(torch.float32)
+    masked_logits = mask * logits + (1 - mask) * -1e30
+    softmax_fn = F.log_softmax if log_softmax else F.softmax
+    probs = softmax_fn(masked_logits, dim)
+
+    return probs
+
+
 def visualize_table(essay_ids, rater_1, num_visuals):
     """Visualize text examples to TensorBoard.
 
@@ -606,3 +633,71 @@ def visualize_table(essay_ids, rater_1, num_visuals):
         gold_rater1, gold_rater2 = score_1, score_2
         x.add_row([essay, gold_rater1, rater1])
     print(x)
+
+
+def load_csv(args, mode='train'):
+    file_groups = [
+        os.path.join(args.ensemble_model_1, f'best_{mode}.csv'),
+        os.path.join(args.ensemble_model_2, f'best_{mode}.csv')
+    ]
+    if len(args.ensemble_model_3) != 0:
+        file_groups.append(os.path.join(args.ensemble_model_3, f'best_{mode}.csv'))
+    return file_groups
+
+
+def mock_run(model: torch.nn.Module, args: argparse.Namespace, prompts: dict):
+    essay = str(input("Please enter the essay you wish to have graded\n\n"))
+    essay_set = int(input("Please enter the essay set to which the essay belongs to\n\n"))
+    essay_id = np.random.randint(0, 10000)
+    dataframe = pd.DataFrame({
+        'essay_id': [essay_id],
+        'essay_set': [essay_set],
+        'essay': [essay],
+        'domain1_score': [3],
+        'domain2_score': [4]
+    })
+    collate_fn = None
+    dataset = None
+    if args.model == 'bert':
+        dataset = BertDataset(
+            dataframe,
+            args.max_seq_length,
+            doc_stride=args.doc_stride,
+            prompts=prompts,
+            bert_model=args.bert_model
+        )
+        collate_fn = collate_fn_bert
+    elif args.model == 'bidaf':
+        dataset = BiDAFDataset(
+            dataframe,
+            prompts,
+            mode='experiment',
+            seq_len=args.max_seq_length
+        )
+        collate_fn = collate_fn_bidaf
+    elif args.model == 'han':
+        dataset = HANDataset(
+            dataframe,
+            prompts,
+            args.max_doc_length,
+            args.max_sent_length
+        )
+        collate_fn = collate_fn_han
+
+    loader = data.DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        collate_fn=collate_fn
+    )
+
+    with torch.no_grad():
+        for inputs in loader:
+            # Forward
+            predictions = model(**inputs)
+
+    min_score = prompts[str(essay_set)]['scoring']['domain1_score']['min_score']
+    max_score = prompts[str(essay_set)]['scoring']['domain1_score']['max_score']
+    scaled = round(min_score + ((max_score - min_score) * predictions.tolist()[0]), 2)
+    print(f"The predicted score of the essay is \033[1m {scaled} \033[0m\n")
