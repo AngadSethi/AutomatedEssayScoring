@@ -118,6 +118,14 @@ def get_train_args():
                         type=bool,
                         default=True,
                         help='A flag to disable CUDA support')
+    parser.add_argument('--train_file',
+                        type=str,
+                        default='./data/training_set_rel3.tsv',
+                        help='The CSV file to train')
+    parser.add_argument('--prompts',
+                        type=str,
+                        default='./data/essay_prompts.json',
+                        help='The JSON files with prompts')
     parser.add_argument('--ensemble_model_1',
                         type=str,
                         default='',

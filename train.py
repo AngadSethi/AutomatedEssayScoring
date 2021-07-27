@@ -73,12 +73,12 @@ def main(args: argparse.Namespace):
     log.info('Building dataset and model...')
 
     # Reading in essay prompts.
-    with open('./data/essay_prompts.json', 'r', encoding='utf-8') as fh:
+    with open(args.prompts, 'r', encoding='utf-8') as fh:
         prompts = json_load(fh)
 
     # Reading in the data from the TSV file
     dataset = pd.read_csv(
-        './data/training_set_rel3.tsv',
+        args.train_file,
         header=0,
         sep='\t',
         verbose=True,
