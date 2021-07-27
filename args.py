@@ -63,7 +63,7 @@ def get_train_args():
                         help='The type of BERT model used.')
     parser.add_argument('--model',
                         type=str,
-                        choices=('bert', 'bidaf', 'han', 'ensemble'),
+                        choices=('bert', 'bidaf', 'han', 'ensemble', 'original'),
                         help='The type of model used.')
     parser.add_argument('--glove_dim',
                         type=int,
@@ -134,7 +134,7 @@ def get_train_args():
                         help='The folder where the train, val, and test results are saved. Assuming the files are '
                              'prefixed with best_')
 
-    args, _ = parser.parse_known_args()
+    args = parser.parse_args()
 
     if args.metric_name == 'MSE':
         # Best checkpoint is the one that minimizes mean squared error

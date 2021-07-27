@@ -32,6 +32,7 @@ from ensemble.dataset import EnsembleDataset, collate_fn as collate_fn_ensemble
 from ensemble.model import Ensemble
 from han.dataset import HANDataset, collate_fn as collate_fn_han
 from han.model import HierarchicalAttentionNetwork
+from models import OriginalModel
 from util import quadratic_weighted_kappa
 
 
@@ -105,7 +106,36 @@ def main(args: argparse.Namespace):
 
     # If the user wants to train a BERT model, use the BERT dataset and the BERT model. The optimizer is the same as the
     # one described in the BERT paper. Learning rate can be adjusted. The same applies for all other models
-    if args.model == 'bert':
+    if args.model == 'original':
+        train_dataset = BertDataset(
+            train_dataset,
+            args.max_seq_length,
+            doc_stride=args.doc_stride,
+            prompts=prompts,
+            bert_model=args.bert_model
+        )
+        dev_dataset = BertDataset(
+            dev_dataset,
+            args.max_seq_length,
+            doc_stride=args.doc_stride,
+            prompts=prompts,
+            bert_model=args.bert_model
+        )
+        test_dataset = BertDataset(
+            test_dataset,
+            args.max_seq_length,
+            doc_stride=args.doc_stride,
+            prompts=prompts,
+            bert_model=args.bert_model
+        )
+        model = OriginalModel(
+            args.hidden_size,
+            args.bert_model
+        )
+        collate_fn = collate_fn_bert
+        optimizer = optim.RMSprop(params=filter(lambda x: x.requires_grad, model.parameters()), lr=args.lr,
+                                  weight_decay=args.l2_wd)
+    elif args.model == 'bert':
         train_dataset = BertDataset(
             train_dataset,
             args.max_seq_length,
@@ -468,19 +498,19 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
 
 
 if __name__ == '__main__':
-    args = get_train_args()
-    args.name = 'ensemble-final'
-    args.model = 'ensemble'
-    args.bert_model = 'bert-base-uncased'
-    args.batch_size = 32
-    args.num_workers = 2
-    args.train_split = True
-    args.num_epochs = 100
-    args.max_doc_length = 100
-    args.max_sent_length = 400
-    args.word_hidden_size = 100
-    args.sent_hidden_size = 100
-    args.max_seq_length = 1024
-    args.lr = 0.001
-    args.eval_steps = 5000
-    main(args)
+    # args = get_train_args()
+    # args.name = 'ensemble-final'
+    # args.model = 'ensemble'
+    # args.bert_model = 'bert-base-uncased'
+    # args.batch_size = 32
+    # args.num_workers = 2
+    # args.train_split = True
+    # args.num_epochs = 100
+    # args.max_doc_length = 100
+    # args.max_sent_length = 400
+    # args.word_hidden_size = 100
+    # args.sent_hidden_size = 100
+    # args.max_seq_length = 1024
+    # args.lr = 0.001
+    # args.eval_steps = 5000
+    main(get_train_args())
