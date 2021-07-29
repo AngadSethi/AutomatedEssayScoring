@@ -11,6 +11,11 @@ def get_train_args():
     """Get arguments needed in train.py."""
     parser = argparse.ArgumentParser('Train a model to score essays in an automated pipeline.')
 
+    parser.add_argument('--name',
+                        '-n',
+                        type=str,
+                        required=True,
+                        help='Name to identify training or test run.')
     parser.add_argument('--train_split',
                         type=bool,
                         default=False,

@@ -29,8 +29,9 @@ class BiDAF(nn.Module):
         drop_prob (float): Dropout probability.
     """
 
-    def __init__(self, hidden_size: int, seq_len: int, vocab: torchtext.vocab.GloVe, drop_prob=0.):
+    def __init__(self, hidden_size: int, seq_len: int, drop_prob=0.):
         super(BiDAF, self).__init__()
+        vocab = torchtext.vocab.GloVe()
         self.emb = layers.Embedding(vocab=vocab)
 
         self.enc = layers.RNNEncoder(input_size=vocab.dim,

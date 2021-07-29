@@ -65,10 +65,6 @@ def main(args: argparse.Namespace):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    # Get embeddings
-    log.info('Loading embeddings...')
-    vocab = GloVe()
-
     # Get data loader
     log.info('Building dataset and model...')
 
@@ -184,7 +180,6 @@ def main(args: argparse.Namespace):
         model = BiDAF(
             args.hidden_size,
             args.max_seq_length,
-            vocab,
             args.drop_prob
         )
         collate_fn = collate_fn_bidaf
@@ -513,4 +508,6 @@ if __name__ == '__main__':
     # args.max_seq_length = 1024
     # args.lr = 0.001
     # args.eval_steps = 5000
+    # args.train_file = '/datastores/automated-essay-scoring/data/training_set_rel3.tsv'
+    # args.prompts = '/datastores/automated-essay-scoring/data/essay_prompts.json'
     main(get_train_args())
