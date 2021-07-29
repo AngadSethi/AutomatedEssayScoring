@@ -36,6 +36,12 @@ class OriginalModel(nn.Module):
         self.bert_encoder = BertModel.from_pretrained(model_checkpoint)
         for param in self.bert_encoder.parameters():
             param.requires_grad = not freeze
+        self.rnn_encoder = layers.RNNEncoder(
+            input_size=self.bert_encoder.config.hidden_size,
+            hidden_size=hidden_size,
+            num_layers=2,
+            drop_prob=0.2
+        )
         self.gru_encoder = nn.GRU(input_size=self.bert_encoder.config.hidden_size, hidden_size=hidden_size,
                                   batch_first=True)
         self.layer = nn.Linear(2 * hidden_size, 1)
@@ -45,9 +51,11 @@ class OriginalModel(nn.Module):
                 masks: torch.BoolTensor, scores: torch.FloatTensor, min_scores: torch.LongTensor,
                 max_scores: torch.LongTensor):
         output = self.bert_encoder(x).last_hidden_state
-        _, output = self.gru_encoder(output)
-        output = output.permute(1, 0, 2)
-        output = torch.flatten(output, start_dim=1)
+        # _, output = self.gru_encoder(output)
+        output = self.rnn_encoder(output)
+        # output = output.permute(1, 0, 2)
+        # output = torch.flatten(output, start_dim=1)
+        output = output[:, -1, :]
         output = self.layer(output)
         output = self.activation(output)
         return torch.squeeze(output, -1)
