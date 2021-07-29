@@ -44,7 +44,7 @@ class OriginalModel(nn.Module):
         )
         self.gru_encoder = nn.GRU(input_size=self.bert_encoder.config.hidden_size, hidden_size=hidden_size,
                                   batch_first=True)
-        self.layer = nn.Linear(2 * hidden_size, 1)
+        self.layer = nn.Linear(hidden_size, 1)
         self.activation = nn.Sigmoid()
 
     def forward(self, essay_ids: torch.LongTensor, essay_sets: torch.LongTensor, x: torch.LongTensor,
