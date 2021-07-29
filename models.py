@@ -55,7 +55,7 @@ class OriginalModel(nn.Module):
         # output = self.rnn_encoder(output)
         output = output.permute(1, 0, 2)
         output = torch.flatten(output, start_dim=1)
-        output = output[:, -1, :]
+        # output = output[:, -1, :]
         output = self.layer(output)
         output = self.activation(output)
         return torch.squeeze(output, -1)
