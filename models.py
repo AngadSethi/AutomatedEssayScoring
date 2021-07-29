@@ -51,10 +51,10 @@ class OriginalModel(nn.Module):
                 masks: torch.BoolTensor, scores: torch.FloatTensor, min_scores: torch.LongTensor,
                 max_scores: torch.LongTensor):
         output = self.bert_encoder(x).last_hidden_state
-        # _, output = self.gru_encoder(output)
-        output = self.rnn_encoder(output)
-        # output = output.permute(1, 0, 2)
-        # output = torch.flatten(output, start_dim=1)
+        _, output = self.gru_encoder(output)
+        # output = self.rnn_encoder(output)
+        output = output.permute(1, 0, 2)
+        output = torch.flatten(output, start_dim=1)
         output = output[:, -1, :]
         output = self.layer(output)
         output = self.activation(output)
