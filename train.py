@@ -34,6 +34,7 @@ from han.dataset import HANDataset, collate_fn as collate_fn_han
 from han.model import HierarchicalAttentionNetwork
 from models import OriginalModel
 from util import quadratic_weighted_kappa
+import os
 
 
 def main(args: argparse.Namespace):
@@ -69,12 +70,12 @@ def main(args: argparse.Namespace):
     log.info('Building dataset and model...')
 
     # Reading in essay prompts.
-    with open(args.prompts, 'r', encoding='utf-8') as fh:
+    with open(os.getcwd() + args.prompts, 'r', encoding='utf-8') as fh:
         prompts = json_load(fh)
 
     # Reading in the data from the TSV file
     dataset = pd.read_csv(
-        args.train_file,
+        os.getcwd() + args.train_file,
         header=0,
         sep='\t',
         verbose=True,
