@@ -36,6 +36,7 @@ from models import OriginalModel
 from util import quadratic_weighted_kappa
 import os
 
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
 def main(args: argparse.Namespace):
     """
@@ -363,7 +364,7 @@ def main(args: argparse.Namespace):
         results_test, pred_dict_test, final_result_test = evaluate(model, test_loader, device)
 
         saver.save(step, model, results[args.metric_name], final_result, final_result_val, final_result_test, device)
-        util.mock_run(model, args, prompts)
+        # util.mock_run(model, args, prompts)
 
         # Log to console
         results_str = ', '.join(f'{k}: {v:05.2f}' for k, v in results_test.items())
