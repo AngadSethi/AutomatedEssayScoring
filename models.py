@@ -65,4 +65,4 @@ class OriginalModel(nn.Module):
         # # output = output[:, -1, :]
         # output = self.layer(output)
         # output = self.activation(output)
-        return torch.squeeze(self.activation(self.bert_encoder(x)), -1)
+        return torch.squeeze(self.activation(self.bert_encoder(x).logits), -1)
