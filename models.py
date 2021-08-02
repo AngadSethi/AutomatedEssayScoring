@@ -5,7 +5,7 @@ Author:
 """
 import torch
 import torch.nn as nn
-from transformers import BertModel, AutoModel, AutoModelWithHeads
+from transformers import BertModel, AutoModel, AutoModelWithHeads, AutoConfig
 
 import layers
 
@@ -33,15 +33,16 @@ class Ensemble(nn.Module):
 class OriginalModel(nn.Module):
     def __init__(self, hidden_size: int, model_checkpoint: str = 'bert-base-uncased', freeze: bool = True):
         super(OriginalModel, self).__init__()
-        self.bert_encoder = AutoModelWithHeads.from_pretrained(model_checkpoint)
+        config = AutoConfig.from_pretrained(model_checkpoint, num_labels=1)
+        self.bert_encoder = AutoModelWithHeads.from_pretrained(model_checkpoint, config=config)
 
         self.bert_encoder.add_adapter("aes")
         self.bert_encoder.add_classification_head(
             "aes",
-            num_labels=1,
-            use_pooler=True
+            num_labels=1
         )
         self.bert_encoder.train_adapter("aes")
+        self.bert_encoder.set_active_adapters("aes")
 
         # self.rnn_encoder = layers.RNNEncoder(
         #     input_size=self.bert_encoder.config.hidden_size,
