@@ -39,7 +39,6 @@ class OriginalModel(nn.Module):
         self.bert_encoder.add_classification_head(
             "aes",
             num_labels=1,
-            activation_function='sigmoid',
             use_pooler=True
         )
         self.bert_encoder.train_adapter("aes")
@@ -53,7 +52,7 @@ class OriginalModel(nn.Module):
         # self.gru_encoder = nn.GRU(input_size=self.bert_encoder.config.hidden_size, hidden_size=hidden_size,
         #                           batch_first=True)
         # self.layer = nn.Linear(hidden_size, 1)
-        # self.activation = nn.Sigmoid()
+        self.activation = nn.Sigmoid()
 
     def forward(self, essay_ids: torch.LongTensor, essay_sets: torch.LongTensor, x: torch.LongTensor,
                 masks: torch.BoolTensor, scores: torch.FloatTensor, min_scores: torch.LongTensor,
@@ -66,4 +65,4 @@ class OriginalModel(nn.Module):
         # # output = output[:, -1, :]
         # output = self.layer(output)
         # output = self.activation(output)
-        return torch.squeeze(self.bert_encoder(x), -1)
+        return torch.squeeze(self.activation(self.bert_encoder(x)), -1)
