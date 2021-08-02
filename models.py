@@ -5,7 +5,7 @@ Author:
 """
 import torch
 import torch.nn as nn
-from transformers import BertModel
+from transformers import BertModel, AutoModel, AutoModelWithHeads
 
 import layers
 
@@ -33,29 +33,37 @@ class Ensemble(nn.Module):
 class OriginalModel(nn.Module):
     def __init__(self, hidden_size: int, model_checkpoint: str = 'bert-base-uncased', freeze: bool = True):
         super(OriginalModel, self).__init__()
-        self.bert_encoder = BertModel.from_pretrained(model_checkpoint)
-        for param in self.bert_encoder.parameters():
-            param.requires_grad = not freeze
-        self.rnn_encoder = layers.RNNEncoder(
-            input_size=self.bert_encoder.config.hidden_size,
-            hidden_size=hidden_size,
-            num_layers=2,
-            drop_prob=0.2
+        self.bert_encoder = AutoModelWithHeads.from_pretrained(model_checkpoint)
+
+        self.bert_encoder.add_adapter("aes")
+        self.bert_encoder.add_classification_head(
+            "aes",
+            num_labels=1,
+            activation_function='sigmoid',
+            use_pooler=True
         )
-        self.gru_encoder = nn.GRU(input_size=self.bert_encoder.config.hidden_size, hidden_size=hidden_size,
-                                  batch_first=True)
-        self.layer = nn.Linear(hidden_size, 1)
-        self.activation = nn.Sigmoid()
+        self.bert_encoder.train_adapter("aes")
+
+        # self.rnn_encoder = layers.RNNEncoder(
+        #     input_size=self.bert_encoder.config.hidden_size,
+        #     hidden_size=hidden_size,
+        #     num_layers=2,
+        #     drop_prob=0.2
+        # )
+        # self.gru_encoder = nn.GRU(input_size=self.bert_encoder.config.hidden_size, hidden_size=hidden_size,
+        #                           batch_first=True)
+        # self.layer = nn.Linear(hidden_size, 1)
+        # self.activation = nn.Sigmoid()
 
     def forward(self, essay_ids: torch.LongTensor, essay_sets: torch.LongTensor, x: torch.LongTensor,
                 masks: torch.BoolTensor, scores: torch.FloatTensor, min_scores: torch.LongTensor,
                 max_scores: torch.LongTensor):
-        output = self.bert_encoder(x).last_hidden_state
-        _, output = self.gru_encoder(output)
-        # output = self.rnn_encoder(output)
-        output = output.permute(1, 0, 2)
-        output = torch.flatten(output, start_dim=1)
-        # output = output[:, -1, :]
-        output = self.layer(output)
-        output = self.activation(output)
-        return torch.squeeze(output, -1)
+        # output = self.bert_encoder(x).last_hidden_state
+        # _, output = self.gru_encoder(output)
+        # # output = self.rnn_encoder(output)
+        # output = output.permute(1, 0, 2)
+        # output = torch.flatten(output, start_dim=1)
+        # # output = output[:, -1, :]
+        # output = self.layer(output)
+        # output = self.activation(output)
+        return torch.squeeze(self.bert_encoder(x), -1)
