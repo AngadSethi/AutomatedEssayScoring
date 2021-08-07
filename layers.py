@@ -178,14 +178,15 @@ class BiDAFOutput(nn.Module):
         super(BiDAFOutput, self).__init__()
         self.linear_1_mod = nn.Linear(2 * hidden_size, 2 * hidden_size)
         self.linear_1_att = nn.Linear(8 * hidden_size, 8 * hidden_size)
-        self.activation_1 = nn.ReLU()
+        self.activation_1_mod = nn.ReLU()
+        self.activation_1_att = nn.ReLU()
         self.linear_2 = nn.Linear(10 * hidden_size, 1)
         self.activation_2 = nn.Sigmoid()
 
     def forward(self, att, mod):
         # logits_1 = torch.cat([att, mod], -1)
-        att = self.activation_1(self.linear_1_att(att))
-        mod = self.activation_1(self.linear_1_mod(mod))
+        att = self.activation_1_att(self.linear_1_att(att))
+        mod = self.activation_1_mod(self.linear_1_mod(mod))
 
         logits_1 = torch.cat([att, mod], -1)
 
