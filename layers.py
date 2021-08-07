@@ -176,10 +176,10 @@ class BiDAFOutput(nn.Module):
 
     def __init__(self, hidden_size, seq_len):
         super(BiDAFOutput, self).__init__()
-        self.linear_1 = nn.Linear(2 * hidden_size, 2 * hidden_size)
+        self.linear_1 = nn.Linear(1 * hidden_size, 1 * hidden_size)
         self.activation_1 = nn.Tanh()
         self.dropout_1 = nn.Dropout(0.1)
-        self.linear_2 = nn.Linear(2 * hidden_size, 1)
+        self.linear_2 = nn.Linear(1 * hidden_size, 1)
         self.activation_2 = nn.Sigmoid()
 
     def forward(self, att, mod):
