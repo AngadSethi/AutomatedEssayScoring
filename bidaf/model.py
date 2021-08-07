@@ -67,6 +67,6 @@ class BiDAF(nn.Module):
 
         mod = self.mod(att, c_len)  # (batch_size, c_len, 2 * hidden_size)
 
-        out = self.out(att, mod)
+        out = self.out(att[:, -1, :], mod[:, -1, :])
 
         return out
