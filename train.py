@@ -417,7 +417,6 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
 
             # Forward
             predictions = model(**inputs)
-            predictions = torch.squeeze(predictions, dim=-1)
 
             # Compute loss.
             loss_op = loss(predictions, inputs['scores'])
