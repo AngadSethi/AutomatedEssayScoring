@@ -323,6 +323,8 @@ def main(args: argparse.Namespace):
                 final_result['id'].extend(inputs['essay_ids'].tolist())
                 final_result['result'].extend(predictions.tolist())
 
+                print(predictions, inputs['scores'])
+
                 # Backward
                 loss_op.backward()
 
