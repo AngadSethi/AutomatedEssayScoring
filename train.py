@@ -328,7 +328,7 @@ def main(args: argparse.Namespace):
 
                 # Gradient Clipping
                 nn.utils.clip_grad_norm_(filter(lambda x : x.requires_grad, model.parameters()), args.max_grad_norm)
-                nn.utils.clip_grad_value_(filter(lambda x: x.requires_grad, model.parameters()), args.max_grad_value)
+                # nn.utils.clip_grad_value_(filter(lambda x: x.requires_grad, model.parameters()), args.max_grad_value)
                 optimizer.step()
                 scheduler.step()
 
