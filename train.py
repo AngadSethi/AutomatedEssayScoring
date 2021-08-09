@@ -185,8 +185,8 @@ def main(args: argparse.Namespace):
             args.drop_prob
         )
         collate_fn = collate_fn_bidaf
-        optimizer = optim.Adadelta(params=filter(lambda x: x.requires_grad, model.parameters()), lr=args.lr,
-                                   weight_decay=args.l2_wd)
+        optimizer = optim.SGD(params=filter(lambda x: x.requires_grad, model.parameters()), lr=args.lr, momentum=0.9,
+                              weight_decay=args.l2_wd)
     elif args.model == 'han':
         train_dataset = HANDataset(
             train_dataset,
