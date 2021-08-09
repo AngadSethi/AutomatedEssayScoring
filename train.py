@@ -323,13 +323,12 @@ def main(args: argparse.Namespace):
                 final_result['id'].extend(inputs['essay_ids'].tolist())
                 final_result['result'].extend(predictions.tolist())
 
-                print(predictions, inputs['scores'])
-
                 # Backward
                 loss_op.backward()
 
                 # Gradient Clipping
                 nn.utils.clip_grad_norm_(filter(lambda x : x.requires_grad, model.parameters()), args.max_grad_norm)
+                nn.utils.clip_grad_value_(filter(lambda x: x.requires_grad, model.parameters()), args.max_grad_value)
                 optimizer.step()
                 scheduler.step()
 
@@ -408,7 +407,7 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
         'id': [],
         'result': []
     }
-    with open('./data/essay_prompts.json', 'r', encoding='utf-8') as fh:
+    with open(args.prompts, 'r', encoding='utf-8') as fh:
         prompt_dict = json_load(fh)
     with torch.no_grad(), tqdm(total=len(data_loader.dataset)) as progress_bar:
         for inputs in data_loader:

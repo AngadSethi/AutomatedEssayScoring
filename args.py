@@ -111,6 +111,10 @@ def get_train_args():
                         type=float,
                         default=5.0,
                         help='Maximum gradient norm for gradient clipping.')
+    parser.add_argument('--max_grad_value',
+                        type=float,
+                        default=0.0,
+                        help='Maximum gradient value for gradient clipping.')
     parser.add_argument('--seed',
                         type=int,
                         default=224,
