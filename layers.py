@@ -193,7 +193,7 @@ class BiDAFOutput(nn.Module):
         logits_1 = self.linear_2(logits_1)
         logits_1 = self.activation_2(logits_1)
 
-        return logits_1
+        return torch.squeeze(logits_1, -1)
 
 
 class GRUEncoder(nn.Module):

@@ -42,6 +42,4 @@ class BERT(nn.Module):
 
         outputs = self.activation(self.projection(outputs.pooler_output))
 
-        outputs = torch.squeeze(outputs, dim=-1)
-
-        return outputs
+        return torch.squeeze(outputs, -1)

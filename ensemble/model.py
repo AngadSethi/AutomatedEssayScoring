@@ -24,6 +24,4 @@ class Ensemble(nn.Module):
 
         outputs = self.activation(self.projection(outputs))
 
-        outputs = torch.squeeze(outputs, dim=-1)
-
         return outputs
