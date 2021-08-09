@@ -430,12 +430,12 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
             final_result['result'].extend(predictions.tolist())
 
             # Scale back the final results.
-            predictions = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * predictions)
+            scaled_predictions = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * predictions)
             scores_domain1 = inputs['min_scores'] + ((inputs['max_scores'] - inputs['min_scores']) * inputs['scores'])
 
             # Compute QWK on the entire dataset irrespective of the essay prompt.
             quadratic_kappa_1 = quadratic_weighted_kappa(
-                torch.round(predictions).type(torch.LongTensor).tolist(),
+                torch.round(scaled_predictions).type(torch.LongTensor).tolist(),
                 torch.round(scores_domain1).type(torch.LongTensor).tolist(),
                 min_rating=0,
                 max_rating=60
@@ -443,7 +443,7 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
 
             # Update the meter.
             qwk_meter_rater_1.update(quadratic_kappa_1, batch_size)
-            pred_dict.update(dict(zip(inputs['essay_ids'].tolist(), predictions.tolist())))
+            pred_dict.update(dict(zip(inputs['essay_ids'].tolist(), scaled_predictions.tolist())))
 
             # Log info
             progress_bar.update(batch_size)
