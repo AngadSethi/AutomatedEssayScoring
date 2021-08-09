@@ -453,7 +453,7 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
     model.train()
     final_dict = {}
 
-    print(pred_dict)
+    # print(pred_dict)
 
     # Get the true scores (unscaled)
     true = data_loader.dataset.domain1_scores_raw
