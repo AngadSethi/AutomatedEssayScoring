@@ -178,8 +178,8 @@ class BiDAFOutput(nn.Module):
         super(BiDAFOutput, self).__init__()
         self.linear_1_mod = nn.Linear(2 * hidden_size, 2 * hidden_size)
         self.linear_1_att = nn.Linear(8 * hidden_size, 8 * hidden_size)
-        self.activation_1_mod = nn.ReLU()
-        self.activation_1_att = nn.ReLU()
+        self.activation_1_mod = nn.Tanh()
+        self.activation_1_att = nn.Tanh()
         self.linear_2 = nn.Linear(10 * hidden_size, 1)
         self.activation_2 = nn.Sigmoid()
 
@@ -192,8 +192,6 @@ class BiDAFOutput(nn.Module):
 
         logits_1 = self.linear_2(logits_1)
         logits_1 = self.activation_2(logits_1)
-
-        logits_1 = torch.squeeze(logits_1, -1)
 
         return logits_1
 

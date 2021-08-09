@@ -119,7 +119,7 @@ def collate_fn(examples: List[Tuple[int, int, List[int], List[int], float, int, 
     essay_sets = torch.LongTensor(essay_sets)
     essays_bert = torch.LongTensor(essays_bert)
     masks = torch.BoolTensor(masks)
-    scores_domain1 = torch.FloatTensor(scores_domain1)
+    scores_domain1 = torch.unsqueeze(torch.FloatTensor(scores_domain1), -1)
     min_scores_domain1 = torch.LongTensor(min_scores_domain1)
     max_scores_domain1 = torch.LongTensor(max_scores_domain1)
 

@@ -5,7 +5,7 @@ Author:
 """
 import torch
 import torch.nn as nn
-from transformers import BertModel, AutoModel, AutoModelWithHeads, AutoConfig
+from transformers import BertModel, AutoModel, AutoConfig, AutoModelWithHeads
 
 import layers
 
@@ -39,6 +39,7 @@ class OriginalModel(nn.Module):
         self.bert_encoder.add_adapter("aes")
         self.bert_encoder.add_classification_head(
             "aes",
+            use_pooler=True,
             num_labels=1
         )
         self.bert_encoder.train_adapter("aes")
@@ -66,4 +67,4 @@ class OriginalModel(nn.Module):
         # # output = output[:, -1, :]
         # output = self.layer(output)
         # output = self.activation(output)
-        return torch.squeeze(self.activation(self.bert_encoder(x).logits), -1)
+        return self.activation(self.bert_encoder(x).logits)

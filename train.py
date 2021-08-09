@@ -18,7 +18,6 @@ import torch.optim.lr_scheduler as sched
 import torch.utils.data as data
 from sklearn.model_selection import train_test_split
 from tensorboardX import SummaryWriter
-from torchtext.vocab import GloVe
 from tqdm.auto import tqdm
 from ujson import load as json_load
 
@@ -37,6 +36,7 @@ from util import quadratic_weighted_kappa
 import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 
 def main(args: argparse.Namespace):
     """
@@ -71,12 +71,12 @@ def main(args: argparse.Namespace):
     log.info('Building dataset and model...')
 
     # Reading in essay prompts.
-    with open(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', args.prompts)), 'r', encoding='utf-8') as fh:
+    with open(args.prompts, 'r', encoding='utf-8') as fh:
         prompts = json_load(fh)
 
     # Reading in the data from the TSV file
     dataset = pd.read_csv(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), '..', args.train_file)),
+        args.train_file,
         header=0,
         sep='\t',
         verbose=True,

@@ -16,7 +16,8 @@ dependencies:
   - urllib3
   - pytorch
   - pandas
-  - transformers
+  - prettytable
+  - adapter-transformers
   - scikit-learn
   - torchtext
   - matplotlib

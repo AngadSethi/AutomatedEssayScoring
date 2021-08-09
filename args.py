@@ -14,7 +14,7 @@ def get_train_args():
     parser.add_argument('--name',
                         '-n',
                         type=str,
-                        required=True,
+                        required=False,
                         help='Name to identify training or test run.')
     parser.add_argument('--train_split',
                         type=bool,
@@ -147,7 +147,7 @@ def get_train_args():
                         help='The folder where the train, val, and test results are saved. Assuming the files are '
                              'prefixed with best_')
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     if args.metric_name == 'MSE':
         # Best checkpoint is the one that minimizes mean squared error

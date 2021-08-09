@@ -107,7 +107,7 @@ def collate_fn(examples):
     x = torch.FloatTensor(x)
     y = torch.FloatTensor(y)
     z = torch.FloatTensor(z) if len(z) > 0 else None
-    scores_domain1 = torch.FloatTensor(scores_domain1)
+    scores_domain1 = torch.unsqueeze(torch.FloatTensor(scores_domain1), -1)
     min_scores_domain1 = torch.LongTensor(min_scores_domain1)
     max_scores_domain1 = torch.LongTensor(max_scores_domain1)
 
