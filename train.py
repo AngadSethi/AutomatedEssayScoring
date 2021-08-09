@@ -407,7 +407,7 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
         'id': [],
         'result': []
     }
-    with open(args.prompts, 'r', encoding='utf-8') as fh:
+    with open('./data/essay_prompts.json', 'r', encoding='utf-8') as fh:
         prompt_dict = json_load(fh)
     with torch.no_grad(), tqdm(total=len(data_loader.dataset)) as progress_bar:
         for inputs in data_loader:
