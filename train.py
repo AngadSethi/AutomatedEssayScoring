@@ -435,8 +435,8 @@ def evaluate(model: nn.Module, data_loader: data.DataLoader, device: str) -> Tup
 
             # Compute QWK on the entire dataset irrespective of the essay prompt.
             quadratic_kappa_1 = quadratic_weighted_kappa(
-                torch.round(scaled_predictions).type(torch.LongTensor).tolist(),
-                torch.round(scores_domain1).type(torch.LongTensor).tolist(),
+                torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
+                torch.round(scores_domain1).type(torch.IntTensor).tolist(),
                 min_rating=0,
                 max_rating=60
             )

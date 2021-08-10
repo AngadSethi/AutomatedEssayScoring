@@ -1,11 +1,16 @@
 import torch
 import torch.nn as nn
 import torchtext
+from torch import optim
+import torch.nn.functional as F
 
 import layers
+from pytorch_lightning import LightningModule
+
+from util import quadratic_weighted_kappa, log_final_results
 
 
-class BiDAF(nn.Module):
+class BiDAF(LightningModule):
     """Baseline BiDAF model for SQuAD.
 
     Based on the paper:
@@ -29,11 +34,11 @@ class BiDAF(nn.Module):
         drop_prob (float): Dropout probability.
     """
 
-    def __init__(self, hidden_size: int, seq_len: int, drop_prob=0.):
-        super(BiDAF, self).__init__()
+    def __init__(self, hidden_size: int, seq_len: int, lr: float, drop_prob=0.):
+        super().__init__()
         vocab = torchtext.vocab.GloVe()
         self.emb = layers.Embedding(vocab=vocab)
-
+        self.lr = lr
         self.enc = layers.RNNEncoder(input_size=vocab.dim,
                                      hidden_size=hidden_size,
                                      num_layers=1,
@@ -49,9 +54,11 @@ class BiDAF(nn.Module):
 
         self.out = layers.BiDAFOutput(hidden_size=hidden_size, seq_len=seq_len)
 
-    def forward(self, essay_ids: torch.LongTensor, essay_sets: torch.LongTensor, x: torch.LongTensor,
-                prompts: torch.LongTensor, scores: torch.FloatTensor, min_scores: torch.LongTensor,
-                max_scores: torch.LongTensor) -> torch.Tensor:
+    def configure_optimizers(self):
+        optimizer = optim.SGD(params=filter(lambda x: x.requires_grad, self.parameters()), lr=self.lr, momentum=0.9)
+        return optimizer
+
+    def forward(self, x: torch.LongTensor, prompts: torch.LongTensor) -> torch.Tensor:
         c_mask = torch.zeros_like(x) != x
         q_mask = torch.zeros_like(prompts) != prompts
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
@@ -70,3 +77,49 @@ class BiDAF(nn.Module):
         out = self.out(att[:, -1, :], mod[:, -1, :])
 
         return out
+
+    def training_step(self, batch, batch_idx):
+        essay_ids, essay_sets, x, prompts, scores, min_scores, max_scores = batch
+        predictions = self(x, prompts)
+        loss = F.mse_loss(predictions, scores)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        essay_ids, essay_sets, x, prompts, scores, min_scores, max_scores = batch
+        predictions = self(x, prompts)
+        loss = F.mse_loss(predictions, scores)
+
+        scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
+        scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
+
+        quadratic_kappa_overall = quadratic_weighted_kappa(
+            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
+            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
+            min_rating=0,
+            max_rating=60
+        )
+
+        self.log_dict({'val_loss': loss, 'quadratic_kappa_overall': quadratic_kappa_overall})
+
+        return {
+            'essay_ids': essay_ids,
+            'essay_sets': essay_sets,
+            'loss': loss,
+            'predictions': scaled_predictions,
+            'scores': scores_domain1
+        }
+
+    def final_results(self, outputs):
+        log_final_results(outputs, self.log_dict, self.prompts)
+
+    def test_step(self, batch, batch_idx):
+        essay_ids, essay_sets, x, prompts, scores, min_scores, max_scores = batch
+        predictions = self(x, prompts)
+        loss = F.mse_loss(predictions, scores)
+        return loss
+
+    def validation_epoch_end(self, outputs):
+        self.final_results(outputs)
+
+    def test_epoch_end(self, outputs):
+        self.final_results(outputs)

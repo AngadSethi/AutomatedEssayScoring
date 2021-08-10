@@ -1,12 +1,15 @@
 import os
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import pandas as pd
 import torch
 import torchtext
+from pytorch_lightning import LightningDataModule
+from sklearn.model_selection import train_test_split
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from tqdm.auto import tqdm
+from ujson import load as json_load
 
 
 class BiDAFDataset(Dataset):
@@ -150,12 +153,85 @@ def collate_fn(examples):
     min_scores_domain1 = torch.LongTensor(min_scores_domain1)
     max_scores_domain1 = torch.LongTensor(max_scores_domain1)
 
-    return {
-        'essay_ids': essay_ids,
-        'essay_sets': essay_sets,
-        'x': essays_bidaf,
-        'prompts': prompts,
-        'scores': scores_domain1,
-        'min_scores': min_scores_domain1,
-        'max_scores': max_scores_domain1
-    }
+    return (
+        essay_ids,
+        essay_sets,
+        essays_bidaf,
+        prompts,
+        scores_domain1,
+        min_scores_domain1,
+        max_scores_domain1
+    )
+
+
+class BidafDataModule(LightningDataModule):
+    def __init__(self, train_file: str, prompts_file: str, seq_len: int, batch_size: int):
+        super().__init__()
+        self.train_file = train_file
+        self.seq_len = seq_len
+        self.prompts_file = prompts_file
+        self.batch_size = batch_size
+
+    def setup(self, stage: Optional[str] = None):
+        torchtext.vocab.GloVe()
+        # Reading in essay prompts.
+        with open(self.prompts_file, 'r', encoding='utf-8') as fh:
+            self.prompts = json_load(fh)
+
+        dataset = pd.read_csv(
+            self.train_file,
+            header=0,
+            sep='\t',
+            usecols=['essay_id', 'essay_set', 'essay', 'domain1_score', 'domain2_score'],
+            encoding='latin-1'
+        )
+        self.train_dataset, self.dev_dataset, self.test_dataset = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+        # There are eight essay prompts in total.
+        for x in range(1, 9):
+            # Train - 80%, Dev - 10%, Test - 10%
+            # Dev and test sets contain essays from all prompts, to report QWK scores on each prompt set.
+            t, d = train_test_split(dataset[dataset['essay_set'] == x], test_size=0.2)
+            d, test = train_test_split(d, test_size=0.5)
+            self.train_dataset = pd.concat([self.train_dataset, t])
+            self.dev_dataset = pd.concat([self.dev_dataset, d])
+            self.test_dataset = pd.concat([self.test_dataset, test])
+
+        self.train_dataset = BiDAFDataset(
+            self.train_dataset,
+            self.prompts,
+            self.seq_len
+        )
+        self.dev_dataset = BiDAFDataset(
+            self.dev_dataset,
+            self.prompts,
+            self.seq_len,
+            mode='dev'
+        )
+        self.test_dataset = BiDAFDataset(
+            self.test_dataset,
+            self.prompts,
+            self.seq_len,
+            mode='test'
+        )
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            collate_fn=collate_fn
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.dev_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_fn
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_dataset,
+            batch_size=self.batch_size,
+            collate_fn=collate_fn
+        )

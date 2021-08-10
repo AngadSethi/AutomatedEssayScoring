@@ -5,9 +5,14 @@ Author:
 """
 import torch
 import torch.nn as nn
+from pytorch_lightning import LightningModule
+from torch import optim
 from transformers import BertModel, AutoModel, AutoConfig, AutoModelWithHeads
 
 import layers
+from util import quadratic_weighted_kappa, log_final_results
+import torch.nn.functional as F
+from ujson import load as json_load
 
 
 class Ensemble(nn.Module):
@@ -30,9 +35,9 @@ class Ensemble(nn.Module):
         return self.out(output_1, output_2)
 
 
-class OriginalModel(nn.Module):
-    def __init__(self, hidden_size: int, model_checkpoint: str = 'bert-base-uncased', freeze: bool = True):
-        super(OriginalModel, self).__init__()
+class BertModelWithAdapters(LightningModule):
+    def __init__(self, lr: float, prompts_file: str, model_checkpoint: str = 'bert-base-uncased'):
+        super().__init__()
         config = AutoConfig.from_pretrained(model_checkpoint, num_labels=1)
         self.bert_encoder = AutoModelWithHeads.from_pretrained(model_checkpoint, config=config)
 
@@ -44,27 +49,61 @@ class OriginalModel(nn.Module):
         )
         self.bert_encoder.train_adapter("aes")
         self.bert_encoder.set_active_adapters("aes")
-
-        # self.rnn_encoder = layers.RNNEncoder(
-        #     input_size=self.bert_encoder.config.hidden_size,
-        #     hidden_size=hidden_size,
-        #     num_layers=2,
-        #     drop_prob=0.2
-        # )
-        # self.gru_encoder = nn.GRU(input_size=self.bert_encoder.config.hidden_size, hidden_size=hidden_size,
-        #                           batch_first=True)
-        # self.layer = nn.Linear(hidden_size, 1)
         self.activation = nn.Sigmoid()
+        self.lr = lr
 
-    def forward(self, essay_ids: torch.LongTensor, essay_sets: torch.LongTensor, x: torch.LongTensor,
-                masks: torch.BoolTensor, scores: torch.FloatTensor, min_scores: torch.LongTensor,
-                max_scores: torch.LongTensor):
-        # output = self.bert_encoder(x).last_hidden_state
-        # _, output = self.gru_encoder(output)
-        # # output = self.rnn_encoder(output)
-        # output = output.permute(1, 0, 2)
-        # output = torch.flatten(output, start_dim=1)
-        # # output = output[:, -1, :]
-        # output = self.layer(output)
-        # output = self.activation(output)
-        return self.activation(self.bert_encoder(x).logits)
+        with open(prompts_file, 'r', encoding='utf-8') as fh:
+            self.prompts = json_load(fh)
+
+    def configure_optimizers(self):
+        optimizer = optim.AdamW(params=filter(lambda x: x.requires_grad, self.parameters()), lr=self.lr)
+        return optimizer
+
+    def forward(self, x: torch.LongTensor, masks: torch.BoolTensor):
+        return torch.squeeze(self.activation(self.bert_encoder(x, attention_mask=masks).logits), -1)
+
+    def training_step(self, batch, batch_idx):
+        essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
+        predictions = self(x, masks)
+        loss = F.mse_loss(predictions, scores)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
+        predictions = self(x, masks)
+        loss = F.mse_loss(predictions, scores)
+
+        scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
+        scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
+
+        quadratic_kappa_overall = quadratic_weighted_kappa(
+            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
+            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
+            min_rating=0,
+            max_rating=60
+        )
+
+        self.log_dict({'val_loss': loss, 'quadratic_kappa_overall': quadratic_kappa_overall})
+
+        return {
+            'essay_ids': essay_ids,
+            'essay_sets': essay_sets,
+            'loss': loss,
+            'predictions': scaled_predictions,
+            'scores': scores_domain1
+        }
+
+    def final_results(self, outputs):
+        log_final_results(outputs, self.log_dict, self.prompts)
+
+    def test_step(self, batch, batch_idx):
+        essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
+        predictions = self(x, masks)
+        loss = F.mse_loss(predictions, scores)
+        return loss
+
+    def validation_epoch_end(self, outputs):
+        self.final_results(outputs)
+
+    def test_epoch_end(self, outputs):
+        self.final_results(outputs)

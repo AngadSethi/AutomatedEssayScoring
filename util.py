@@ -5,7 +5,6 @@ Most of the functions here have been borrowed from https://github.com/chrischute
 Author:
     Angad Sethi (angadsethi_2k18co066@dtu.ac.in)
 """
-import argparse
 import json
 import logging
 import math
@@ -19,11 +18,7 @@ import torch
 import tqdm
 from prettytable import PrettyTable
 import torch.nn.functional as F
-from torch.utils import data
 
-from bert.dataset import BertDataset, collate_fn as collate_fn_bert
-from bidaf.dataset import BiDAFDataset, collate_fn as collate_fn_bidaf
-from han.dataset import HANDataset, collate_fn as collate_fn_han
 
 class AverageMeter:
     """Keep track of average values over time.
@@ -645,59 +640,37 @@ def load_csv(args, mode='train'):
     return file_groups
 
 
-def mock_run(model: torch.nn.Module, args: argparse.Namespace, prompts: dict):
-    essay = str(input("Please enter the essay you wish to have graded\n\n"))
-    essay_set = int(input("Please enter the essay set to which the essay belongs to\n\n"))
-    essay_id = np.random.randint(0, 10000)
-    dataframe = pd.DataFrame({
-        'essay_id': [essay_id],
-        'essay_set': [essay_set],
-        'essay': [essay],
-        'domain1_score': [3],
-        'domain2_score': [4]
-    })
-    collate_fn = None
-    dataset = None
-    if args.model == 'bert':
-        dataset = BertDataset(
-            dataframe,
-            args.max_seq_length,
-            doc_stride=args.doc_stride,
-            prompts=prompts,
-            bert_model=args.bert_model
-        )
-        collate_fn = collate_fn_bert
-    elif args.model == 'bidaf':
-        dataset = BiDAFDataset(
-            dataframe,
-            prompts,
-            mode='experiment',
-            seq_len=args.max_seq_length
-        )
-        collate_fn = collate_fn_bidaf
-    elif args.model == 'han':
-        dataset = HANDataset(
-            dataframe,
-            prompts,
-            args.max_doc_length,
-            args.max_sent_length
-        )
-        collate_fn = collate_fn_han
+def log_final_results(outputs, log_dict, prompts):
+    essay_sets = torch.cat([o['essay_sets'] for o in outputs]).tolist()
+    predictions = torch.round(torch.cat([o['predictions'] for o in outputs])).type(torch.IntTensor).tolist()
+    scores = torch.cat([o['scores'] for o in outputs]).type(torch.IntTensor).tolist()
 
-    loader = data.DataLoader(
-        dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.num_workers,
-        collate_fn=collate_fn
-    )
+    result_sets = {}
+    for index, essay_set in enumerate(essay_sets):
+        essay_set = str(essay_set)
+        if essay_set in result_sets.keys():
+            result_sets[essay_set]['predictions'].append(predictions[index])
+            result_sets[essay_set]['scores'].append(scores[index])
+        else:
+            result_sets[essay_set] = {
+                'predictions': [predictions[index]],
+                'scores': [scores[index]]
+            }
 
-    with torch.no_grad():
-        for inputs in loader:
-            # Forward
-            predictions = model(**inputs)
+    avg = 0.0
+    l = 0
+    final_results = {}
 
-    min_score = prompts[str(essay_set)]['scoring']['domain1_score']['min_score']
-    max_score = prompts[str(essay_set)]['scoring']['domain1_score']['max_score']
-    scaled = round(min_score + ((max_score - min_score) * predictions.tolist()[0]), 2)
-    print(f"The predicted score of the essay is \033[1m {scaled} \033[0m\n")
+    for key, value in result_sets.items():
+        qwk = quadratic_weighted_kappa(
+            value['predictions'],
+            value['scores'],
+            min_rating=prompts[str(key)]['scoring']['domain1_score']['min_score'],
+            max_rating=prompts[str(key)]['scoring']['domain1_score']['max_score']
+        )
+        final_results[f"essay_set_{key}"] = qwk
+        avg += qwk
+        l += 1
+
+    final_results[f"essay_set_avg"] = avg / l
+    log_dict(final_results)
