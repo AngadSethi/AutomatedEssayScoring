@@ -1,4 +1,5 @@
 from pytorch_lightning import Trainer, seed_everything
+from pytorch_lightning.callbacks import ModelCheckpoint
 
 from bert.dataset import BertDataModule
 from bert.model import BertModel
@@ -49,7 +50,11 @@ def main(args):
             lr=args.lr,
             drop_prob=0.2
         )
-    trainer = Trainer.from_argparse_args(args)
+
+    trainer = Trainer.from_argparse_args(
+        args,
+        callbacks=[ModelCheckpoint(monitor="quadratic_kappa_overall_val")]
+    )
     # trainer.tune(
     #     model,
     #     datamodule=data
@@ -58,6 +63,7 @@ def main(args):
         model,
         datamodule=data
     )
+    trainer.test()
 
 
 if __name__ == '__main__':
