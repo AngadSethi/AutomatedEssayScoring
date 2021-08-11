@@ -170,7 +170,8 @@ class BertDataModule(LightningDataModule):
             dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            collate_fn=collate_fn_lightning
+            collate_fn=collate_fn_lightning,
+            num_workers=2
         )
 
     def val_dataloader(self):
@@ -184,7 +185,8 @@ class BertDataModule(LightningDataModule):
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
-            collate_fn=collate_fn_lightning
+            collate_fn=collate_fn_lightning,
+            num_workers=2
         )
 
     def test_dataloader(self):
@@ -198,5 +200,6 @@ class BertDataModule(LightningDataModule):
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
-            collate_fn=collate_fn_lightning
+            collate_fn=collate_fn_lightning,
+            num_workers=2
         )

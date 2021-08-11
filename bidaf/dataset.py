@@ -219,19 +219,22 @@ class BidafDataModule(LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            collate_fn=collate_fn
+            collate_fn=collate_fn,
+            num_workers=2
         )
 
     def val_dataloader(self):
         return DataLoader(
             self.dev_dataset,
             batch_size=self.batch_size,
-            collate_fn=collate_fn
+            collate_fn=collate_fn,
+            num_workers=2
         )
 
     def test_dataloader(self):
         return DataLoader(
             self.test_dataset,
             batch_size=self.batch_size,
-            collate_fn=collate_fn
+            collate_fn=collate_fn,
+            num_workers=2
         )
