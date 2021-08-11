@@ -3,6 +3,8 @@
 Author:
     Angad Sethi
 """
+from json import dumps
+
 import torch
 import torch.nn as nn
 from pytorch_lightning import LightningModule
@@ -83,7 +85,7 @@ class BertModelWithAdapters(LightningModule):
             max_rating=60
         )
 
-        self.log_dict({'val_loss': loss, 'quadratic_kappa_overall': quadratic_kappa_overall})
+        self.log_dict({'val_loss': loss, 'quadratic_kappa_overall_val': quadratic_kappa_overall})
 
         return {
             'essay_ids': essay_ids,
@@ -97,10 +99,29 @@ class BertModelWithAdapters(LightningModule):
         essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
         predictions = self(x, masks)
         loss = F.mse_loss(predictions, scores)
-        return loss
+
+        scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
+        scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
+
+        quadratic_kappa_overall = quadratic_weighted_kappa(
+            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
+            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
+            min_rating=0,
+            max_rating=60
+        )
+
+        self.log_dict({'test_loss': loss, 'quadratic_kappa_overall_test': quadratic_kappa_overall})
+
+        return {
+            'essay_ids': essay_ids,
+            'essay_sets': essay_sets,
+            'loss': loss,
+            'predictions': scaled_predictions,
+            'scores': scores_domain1
+        }
 
     def validation_epoch_end(self, outputs):
-        self.log_dict(log_final_results(outputs, self.prompts))
+        print(f"Val Results: {dumps(log_final_results(outputs, self.prompts), indent=4)}")
 
     def test_epoch_end(self, outputs):
-        self.log_dict(log_final_results(outputs, self.prompts))
+        print(f"Test Results: {dumps(log_final_results(outputs, self.prompts), indent=4)}")

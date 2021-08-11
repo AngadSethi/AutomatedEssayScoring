@@ -220,7 +220,8 @@ class BidafDataModule(LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=collate_fn,
-            num_workers=2
+            num_workers=2,
+            persistent_workers=True
         )
 
     def val_dataloader(self):
@@ -228,7 +229,8 @@ class BidafDataModule(LightningDataModule):
             self.dev_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn,
-            num_workers=2
+            num_workers=2,
+            persistent_workers=True
         )
 
     def test_dataloader(self):
@@ -236,5 +238,6 @@ class BidafDataModule(LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn,
-            num_workers=2
+            num_workers=2,
+            persistent_workers=True
         )
