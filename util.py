@@ -640,7 +640,7 @@ def load_csv(args, mode='train'):
     return file_groups
 
 
-def log_final_results(outputs, log_dict, prompts):
+def log_final_results(outputs, prompts):
     essay_sets = torch.cat([o['essay_sets'] for o in outputs]).tolist()
     predictions = torch.round(torch.cat([o['predictions'] for o in outputs])).type(torch.IntTensor).tolist()
     scores = torch.cat([o['scores'] for o in outputs]).type(torch.IntTensor).tolist()
@@ -673,4 +673,4 @@ def log_final_results(outputs, log_dict, prompts):
         l += 1
 
     final_results[f"essay_set_avg"] = avg / l
-    log_dict(final_results)
+    return final_results

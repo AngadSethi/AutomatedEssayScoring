@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
-from transformers import BertTokenizerFast, PreTrainedTokenizer
+from transformers import BertTokenizer, PreTrainedTokenizer
 from pytorch_lightning import LightningDataModule
 from ujson import load as json_load
 
@@ -42,11 +42,7 @@ class BertDataset(Dataset):
             max_length=max_seq_length,
             truncation=True,
             padding='max_length',
-            return_overflowing_tokens=False,
-            stride=doc_stride,
             return_attention_mask=True,
-            return_special_tokens_mask=True,
-            return_offsets_mapping=True
         )
 
         self.domain1_scores = [(score - prompts[str(self.essay_sets[i])]['scoring']['domain1_score']['min_score']) / (
@@ -151,7 +147,7 @@ class BertDataModule(LightningDataModule):
             encoding='latin-1'
         )
         self.train_dataset, self.dev_dataset, self.test_dataset = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-        self.tokenizer = BertTokenizerFast.from_pretrained(self.bert_model)
+        self.tokenizer = BertTokenizer.from_pretrained(self.bert_model)
         # There are eight essay prompts in total.
         for x in range(1, 9):
             # Train - 80%, Dev - 10%, Test - 10%

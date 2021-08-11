@@ -1,6 +1,5 @@
 from pytorch_lightning import Trainer, seed_everything
 
-from args import get_train_args
 from bert.dataset import BertDataModule
 from bert.model import BertModel
 import argparse
@@ -51,7 +50,14 @@ def main(args):
             drop_prob=0.2
         )
     trainer = Trainer.from_argparse_args(args)
-    trainer.fit(model, data)
+    # trainer.tune(
+    #     model,
+    #     datamodule=data
+    # )
+    trainer.fit(
+        model,
+        datamodule=data
+    )
 
 
 if __name__ == '__main__':

@@ -109,9 +109,6 @@ class BiDAF(LightningModule):
             'scores': scores_domain1
         }
 
-    def final_results(self, outputs):
-        log_final_results(outputs, self.log_dict, self.prompts)
-
     def test_step(self, batch, batch_idx):
         essay_ids, essay_sets, x, prompts, scores, min_scores, max_scores = batch
         predictions = self(x, prompts)
@@ -119,7 +116,7 @@ class BiDAF(LightningModule):
         return loss
 
     def validation_epoch_end(self, outputs):
-        self.final_results(outputs)
+        self.log_dict(log_final_results(outputs, self.prompts))
 
     def test_epoch_end(self, outputs):
-        self.final_results(outputs)
+        self.log_dict(log_final_results(outputs, self.prompts))
