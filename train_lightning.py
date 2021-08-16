@@ -52,7 +52,6 @@ def main(args):
             lr=args.lr,
             drop_prob=0.2
         )
-    print(model)
     trainer = Trainer.from_argparse_args(
         args,
         callbacks=[ModelCheckpoint(monitor="essay_set_avg")]
