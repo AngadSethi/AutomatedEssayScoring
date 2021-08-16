@@ -44,11 +44,12 @@ class BertModelWithAdapters(LightningModule):
         self.bert_encoder = AutoModelWithHeads.from_pretrained(model_checkpoint, config=config)
 
         self.bert_encoder.add_adapter("aes")
-        self.bert_encoder.add_classification_head(
-            "aes",
-            use_pooler=True,
-            num_labels=1
-        )
+        # self.bert_encoder.add_classification_head(
+        #     "aes",
+        #     use_pooler=True,
+        #     num_labels=1
+        # )
+        self.layer = nn.Linear(config.hidden_size, 1)
         self.bert_encoder.train_adapter("aes")
         self.bert_encoder.set_active_adapters("aes")
         self.activation = nn.Sigmoid()
@@ -62,7 +63,7 @@ class BertModelWithAdapters(LightningModule):
         return optimizer
 
     def forward(self, x: torch.LongTensor, masks: torch.BoolTensor):
-        return torch.squeeze(self.activation(self.bert_encoder(x, attention_mask=masks).logits), -1)
+        return torch.squeeze(self.activation(self.layer(self.bert_encoder(x, attention_mask=masks).pooler_output)), -1)
 
     def training_step(self, batch, batch_idx):
         essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
@@ -78,14 +79,7 @@ class BertModelWithAdapters(LightningModule):
         scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
         scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
 
-        quadratic_kappa_overall = quadratic_weighted_kappa(
-            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
-            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
-            min_rating=0,
-            max_rating=60
-        )
-
-        self.log_dict({'val_loss': loss, 'quadratic_kappa_overall_val': quadratic_kappa_overall})
+        self.log('val_loss', loss)
 
         return {
             'essay_ids': essay_ids,
@@ -103,14 +97,7 @@ class BertModelWithAdapters(LightningModule):
         scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
         scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
 
-        quadratic_kappa_overall = quadratic_weighted_kappa(
-            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
-            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
-            min_rating=0,
-            max_rating=60
-        )
-
-        self.log_dict({'test_loss': loss, 'quadratic_kappa_overall_test': quadratic_kappa_overall})
+        self.log('test_loss', loss)
 
         return {
             'essay_ids': essay_ids,
@@ -121,7 +108,13 @@ class BertModelWithAdapters(LightningModule):
         }
 
     def validation_epoch_end(self, outputs):
-        print(f"Val Results: {dumps(log_final_results(outputs, self.prompts), indent=4)}")
+        final_results = log_final_results(outputs, self.prompts)
+        self.log_dict(final_results)
+
+        print(f"Val Results: {dumps(final_results, indent=4)}")
 
     def test_epoch_end(self, outputs):
-        print(f"Test Results: {dumps(log_final_results(outputs, self.prompts), indent=4)}")
+        final_results = log_final_results(outputs, self.prompts)
+        self.log_dict(final_results)
+
+        print(f"Test Results: {dumps(final_results, indent=4)}")

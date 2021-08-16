@@ -66,14 +66,7 @@ class BertModel(LightningModule):
         scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
         scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
 
-        quadratic_kappa_overall = quadratic_weighted_kappa(
-            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
-            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
-            min_rating=0,
-            max_rating=60
-        )
-
-        self.log_dict({'val_loss': loss, 'quadratic_kappa_overall_dev': quadratic_kappa_overall})
+        self.log('val_loss', loss)
         
         return {
             'essay_ids': essay_ids,
@@ -91,14 +84,7 @@ class BertModel(LightningModule):
         scaled_predictions = min_scores + ((max_scores - min_scores) * predictions)
         scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
 
-        quadratic_kappa_overall = quadratic_weighted_kappa(
-            torch.round(scaled_predictions).type(torch.IntTensor).tolist(),
-            torch.round(scores_domain1).type(torch.IntTensor).tolist(),
-            min_rating=0,
-            max_rating=60
-        )
-
-        self.log_dict({'test_loss': loss, 'quadratic_kappa_overall_test': quadratic_kappa_overall})
+        self.log('test_loss', loss)
 
         return {
             'essay_ids': essay_ids,
@@ -109,7 +95,13 @@ class BertModel(LightningModule):
         }
 
     def validation_epoch_end(self, outputs):
-        print(f"Val Results: {dumps(log_final_results(outputs, self.prompts), indent=4)}")
+        final_results = log_final_results(outputs, self.prompts)
+        self.log_dict(final_results)
+
+        print(f"Val Results: {dumps(final_results, indent=4)}")
 
     def test_epoch_end(self, outputs):
-        print(f"Test Results: {dumps(log_final_results(outputs, self.prompts), indent=4)}")
+        final_results = log_final_results(outputs, self.prompts)
+        self.log_dict(final_results)
+
+        print(f"Test Results: {dumps(final_results, indent=4)}")

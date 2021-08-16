@@ -11,10 +11,12 @@ from models import BertModelWithAdapters
 
 
 def main(args):
+    train_file = args.data_root + '/training_set_rel3.tsv'
+    prompts_file = args.data_root + '/essay_prompts.json'
     if args.model == 'original':
         data = BertDataModule(
-            train_file=args.train_file,
-            prompts_file=args.prompts,
+            train_file=train_file,
+            prompts_file=prompts_file,
             bert_model=args.bert_model,
             batch_size=args.batch_size,
             seq_len=args.max_seq_length
@@ -26,8 +28,8 @@ def main(args):
         )
     elif args.model == 'bert':
         data = BertDataModule(
-            train_file=args.train_file,
-            prompts_file=args.prompts,
+            train_file=train_file,
+            prompts_file=prompts_file,
             bert_model=args.bert_model,
             batch_size=args.batch_size,
             seq_len=args.max_seq_length
@@ -39,8 +41,8 @@ def main(args):
         )
     else:
         data = BidafDataModule(
-            train_file=args.train_file,
-            prompts_file=args.prompts,
+            train_file=train_file,
+            prompts_file=prompts_file,
             batch_size=args.batch_size,
             seq_len=args.max_seq_length
         )
@@ -50,15 +52,15 @@ def main(args):
             lr=args.lr,
             drop_prob=0.2
         )
-
+    print(model)
     trainer = Trainer.from_argparse_args(
         args,
-        callbacks=[ModelCheckpoint(monitor="quadratic_kappa_overall_val")]
+        callbacks=[ModelCheckpoint(monitor="essay_set_avg")]
     )
-    # trainer.tune(
-    #     model,
-    #     datamodule=data
-    # )
+    trainer.tune(
+        model,
+        datamodule=data
+    )
     trainer.fit(
         model,
         datamodule=data
@@ -98,6 +100,10 @@ if __name__ == '__main__':
                         type=int,
                         default=224,
                         help='Random seed for reproducibility.')
+    parser.add_argument('--data_root',
+                        type=str,
+                        default='./data',
+                        help='Root file for data')
     parser.add_argument('--train_file',
                         type=str,
                         default='./data/training_set_rel3.tsv',

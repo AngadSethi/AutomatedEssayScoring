@@ -644,6 +644,12 @@ def log_final_results(outputs, prompts):
     essay_sets = torch.cat([o['essay_sets'] for o in outputs]).tolist()
     predictions = torch.round(torch.cat([o['predictions'] for o in outputs])).type(torch.IntTensor).tolist()
     scores = torch.cat([o['scores'] for o in outputs]).type(torch.IntTensor).tolist()
+    final_results = {'quadratic_kappa_overall': quadratic_weighted_kappa(
+        predictions,
+        scores,
+        min_rating=0,
+        max_rating=60
+    )}
 
     result_sets = {}
     for index, essay_set in enumerate(essay_sets):
@@ -659,7 +665,6 @@ def log_final_results(outputs, prompts):
 
     avg = 0.0
     l = 0
-    final_results = {}
 
     for key, value in result_sets.items():
         qwk = quadratic_weighted_kappa(
