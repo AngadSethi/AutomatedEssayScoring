@@ -1,5 +1,5 @@
 ujson
-torchtext
+torchtext==0.9.1
 prettytable
 nltk
 adapter-transformers==2.1.2
