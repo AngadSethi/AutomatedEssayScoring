@@ -1,5 +1,5 @@
-ujson==4.0.2
-torchtext==0.9.1
-prettytable==2.1.0
-nltk==3.6.1
+ujson
+torchtext
+prettytable
+nltk
 adapter-transformers==2.1.2
