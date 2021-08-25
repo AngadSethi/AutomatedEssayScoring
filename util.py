@@ -1,18 +1,10 @@
 """Utility classes and methods.
 
-Most of the functions here have been borrowed from https://github.com/chrischute/squad
-
 Author:
     Angad Sethi (angadsethi_2k18co066@dtu.ac.in)
 """
-import math
-import os
-
 import numpy as np
-import pandas as pd
 import torch
-from prettytable import PrettyTable
-import torch.nn.functional as F
 
 
 def confusion_matrix(rater_a, rater_b, min_rating=None, max_rating=None):
