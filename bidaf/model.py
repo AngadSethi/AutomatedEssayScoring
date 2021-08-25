@@ -35,29 +35,46 @@ class BiDAF(LightningModule):
         drop_prob (float): Dropout probability.
     """
 
-    def __init__(self, hidden_size: int, seq_len: int, lr: float, drop_prob=0.):
+    def __init__(self, lr: float, hidden_size: int, max_seq_length: int, **kwargs):
         super().__init__()
+        self.save_hyperparameters()
         vocab = torchtext.vocab.GloVe()
         self.emb = layers.Embedding(vocab=vocab)
-        self.lr = lr
         self.enc = layers.RNNEncoder(input_size=vocab.dim,
                                      hidden_size=hidden_size,
                                      num_layers=1,
-                                     drop_prob=drop_prob)
+                                     drop_prob=0.1)
 
         self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
-                                         drop_prob=drop_prob)
+                                         drop_prob=0.1)
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
                                      num_layers=2,
-                                     drop_prob=drop_prob)
+                                     drop_prob=0.1)
 
-        self.out = layers.BiDAFOutput(hidden_size=hidden_size, seq_len=seq_len)
+        self.out = layers.BiDAFOutput(hidden_size=hidden_size, seq_len=max_seq_length)
 
     def configure_optimizers(self):
-        optimizer = optim.SGD(params=filter(lambda x: x.requires_grad, self.parameters()), lr=self.lr, momentum=0.9)
+        optimizer = optim.SGD(self.parameters(), lr=self.hparams.lr, momentum=0.9)
         return optimizer
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("BidafModel")
+        parser.add_argument('--hidden_size',
+                            type=int,
+                            default=100,
+                            help='Number of features in encoder hidden layers.')
+        parser.add_argument('--lr',
+                            type=float,
+                            default=0.00001,
+                            help='Learning rate.')
+        parser.add_argument('--max_seq_length',
+                            type=int,
+                            default=1024,
+                            help='The maximum sequence length that is provided to the model.')
+        return parent_parser
 
     def forward(self, x: torch.LongTensor, prompts: torch.LongTensor) -> torch.Tensor:
         c_mask = torch.zeros_like(x) != x

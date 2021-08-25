@@ -38,32 +38,55 @@ class Ensemble(nn.Module):
 
 
 class BertModelWithAdapters(LightningModule):
-    def __init__(self, lr: float, prompts_file: str, model_checkpoint: str = 'bert-base-uncased'):
+    def __init__(self, lr: float, prompts: str, bert_model: str, **kwargs):
         super().__init__()
-        config = AutoConfig.from_pretrained(model_checkpoint, num_labels=1)
-        self.bert_encoder = AutoModelWithHeads.from_pretrained(model_checkpoint, config=config)
+        self.save_hyperparameters("lr", "bert_model")
+        config = AutoConfig.from_pretrained(bert_model, num_labels=1)
+        self.bert_encoder = AutoModelWithHeads.from_pretrained(bert_model, config=config)
 
         self.bert_encoder.add_adapter("aes")
-        # self.bert_encoder.add_classification_head(
-        #     "aes",
-        #     use_pooler=True,
-        #     num_labels=1
-        # )
-        self.layer = nn.Linear(config.hidden_size, 1)
+        self.bert_encoder.add_classification_head(
+            "aes",
+            num_labels=1,
+            activation_function="relu"
+        )
         self.bert_encoder.train_adapter("aes")
         self.bert_encoder.set_active_adapters("aes")
         self.activation = nn.Sigmoid()
-        self.lr = lr
 
-        with open(prompts_file, 'r', encoding='utf-8') as fh:
+        with open(prompts, 'r', encoding='utf-8') as fh:
             self.prompts = json_load(fh)
 
     def configure_optimizers(self):
-        optimizer = optim.AdamW(params=filter(lambda x: x.requires_grad, self.parameters()), lr=self.lr)
+        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr)
         return optimizer
 
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("BertAdapterModel")
+        parser.add_argument('--bert_model',
+                            type=str,
+                            default='bert-base-uncased',
+                            choices=('bert-base-uncased', 'bert-large-uncased'),
+                            help='The type of BERT model used.')
+        parser.add_argument('--prompts',
+                            type=str,
+                            default='./data/essay_prompts.json',
+                            help='The JSON files with prompts')
+        parser.add_argument('--lr',
+                            type=float,
+                            default=1e-04,
+                            help='Learning rate.')
+        parser.add_argument('--max_seq_length',
+                            type=int,
+                            default=384,
+                            help='The maximum sequence length that is provided to the model.')
+        return parent_parser
+
     def forward(self, x: torch.LongTensor, masks: torch.BoolTensor):
-        return torch.squeeze(self.activation(self.layer(self.bert_encoder(x, attention_mask=masks).pooler_output)), -1)
+        output = self.bert_encoder(input_ids=x, attention_mask=masks).logits
+        output = self.activation(output)
+        return torch.squeeze(output, -1)
 
     def training_step(self, batch, batch_idx):
         essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch

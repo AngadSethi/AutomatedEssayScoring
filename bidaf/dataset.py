@@ -165,12 +165,13 @@ def collate_fn(examples):
 
 
 class BidafDataModule(LightningDataModule):
-    def __init__(self, train_file: str, prompts_file: str, seq_len: int, batch_size: int):
+    def __init__(self, train_file: str, prompts_file: str, seq_len: int, batch_size: int, essay_set: int):
         super().__init__()
         self.train_file = train_file
         self.seq_len = seq_len
         self.prompts_file = prompts_file
         self.batch_size = batch_size
+        self.essay_set = essay_set
 
     def setup(self, stage: Optional[str] = None):
         torchtext.vocab.GloVe()
@@ -185,16 +186,10 @@ class BidafDataModule(LightningDataModule):
             usecols=['essay_id', 'essay_set', 'essay', 'domain1_score', 'domain2_score'],
             encoding='latin-1'
         )
-        self.train_dataset, self.dev_dataset, self.test_dataset = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
-        # There are eight essay prompts in total.
-        for x in range(1, 9):
-            # Train - 80%, Dev - 10%, Test - 10%
-            # Dev and test sets contain essays from all prompts, to report QWK scores on each prompt set.
-            t, d = train_test_split(dataset[dataset['essay_set'] == x], test_size=0.2)
-            d, test = train_test_split(d, test_size=0.5)
-            self.train_dataset = pd.concat([self.train_dataset, t])
-            self.dev_dataset = pd.concat([self.dev_dataset, d])
-            self.test_dataset = pd.concat([self.test_dataset, test])
+
+        filtered_dataset = dataset[dataset['essay_set'] == self.essay_set] if self.essay_set != 0 else dataset
+        self.train_dataset, t = train_test_split(filtered_dataset, test_size=0.2)
+        self.dev_dataset, self.test_dataset = train_test_split(t, test_size=0.5)
 
         self.train_dataset = BiDAFDataset(
             self.train_dataset,

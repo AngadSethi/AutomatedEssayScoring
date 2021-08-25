@@ -11,15 +11,14 @@ from json import dumps
 
 
 class BertModel(LightningModule):
-    def __init__(self, checkpoint: str, prompts_file: str, lr: float):
+    def __init__(self, lr: float, prompts: str, bert_model: str, **kwargs):
         super().__init__()
-
+        self.save_hyperparameters("lr", "bert_model")
         # Download the BERT model from Huggingface hub.
-        self.bert_model = transformers.BertModel.from_pretrained(checkpoint, output_hidden_states=True)
+        self.bert_model = transformers.BertModel.from_pretrained(bert_model, output_hidden_states=True)
         self.bert_config = self.bert_model.config
-        self.lr = lr
 
-        with open(prompts_file, 'r', encoding='utf-8') as fh:
+        with open(prompts, 'r', encoding='utf-8') as fh:
             self.prompts = json_load(fh)
 
         # The linear layer for the pooler output.
@@ -33,8 +32,30 @@ class BertModel(LightningModule):
         self.activation = nn.Sigmoid()
 
     def configure_optimizers(self):
-        optimizer = optim.AdamW(params=filter(lambda x: x.requires_grad, self.parameters()), lr=self.lr)
+        optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr)
         return optimizer
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("BertModel")
+        parser.add_argument('--bert_model',
+                            type=str,
+                            default='bert-base-uncased',
+                            choices=('bert-base-uncased', 'bert-large-uncased'),
+                            help='The type of BERT model used.')
+        parser.add_argument('--prompts',
+                            type=str,
+                            default='./data/essay_prompts.json',
+                            help='The JSON files with prompts')
+        parser.add_argument('--lr',
+                            type=float,
+                            default=1e-04,
+                            help='Learning rate.')
+        parser.add_argument('--max_seq_length',
+                            type=int,
+                            default=384,
+                            help='The maximum sequence length that is provided to the model.')
+        return parent_parser
 
     def forward(self, x: torch.LongTensor, masks: torch.BoolTensor) -> torch.Tensor:
         """
@@ -48,7 +69,7 @@ class BertModel(LightningModule):
         """
         outputs = self.bert_model(x, attention_mask=masks)
 
-        outputs = self.activation(self.projection(outputs.pooler_output))
+        outputs = self.activation(self.projection(outputs.last_hidden_state[:, 0]))
 
         return torch.squeeze(outputs, -1)
 
