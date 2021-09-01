@@ -6,8 +6,7 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 from ujson import load as json_load
 
-from util import quadratic_weighted_kappa, log_final_results
-from json import dumps
+from util import log_final_results
 
 
 class BertModel(LightningModule):
@@ -77,6 +76,7 @@ class BertModel(LightningModule):
         essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
         predictions = self(x, masks)
         loss = F.mse_loss(predictions, scores)
+        self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -119,10 +119,6 @@ class BertModel(LightningModule):
         final_results = log_final_results(outputs, self.prompts)
         self.log_dict(final_results)
 
-        print(f"Val Results: {dumps(final_results, indent=4)}")
-
     def test_epoch_end(self, outputs):
         final_results = log_final_results(outputs, self.prompts)
         self.log_dict(final_results)
-
-        print(f"Test Results: {dumps(final_results, indent=4)}")

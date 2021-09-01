@@ -165,13 +165,14 @@ def collate_fn(examples):
 
 
 class BidafDataModule(LightningDataModule):
-    def __init__(self, train_file: str, prompts_file: str, seq_len: int, batch_size: int, essay_set: int):
+    def __init__(self, train_file: str, prompts_file: str, seq_len: int, batch_size: int, essay_set: int, num_workers: int):
         super().__init__()
         self.train_file = train_file
         self.seq_len = seq_len
         self.prompts_file = prompts_file
         self.batch_size = batch_size
         self.essay_set = essay_set
+        self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None):
         torchtext.vocab.GloVe()
@@ -215,7 +216,7 @@ class BidafDataModule(LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=collate_fn,
-            num_workers=2,
+            num_workers=self.num_workers,
             persistent_workers=True
         )
 
@@ -224,7 +225,7 @@ class BidafDataModule(LightningDataModule):
             self.dev_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn,
-            num_workers=2,
+            num_workers=self.num_workers,
             persistent_workers=True
         )
 
@@ -233,6 +234,6 @@ class BidafDataModule(LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn,
-            num_workers=2,
+            num_workers=self.num_workers,
             persistent_workers=True
         )

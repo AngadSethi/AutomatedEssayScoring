@@ -1,3 +1,5 @@
+import os
+
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 
@@ -9,8 +11,11 @@ from bidaf.dataset import BidafDataModule
 from bidaf.model import BiDAF
 from models import BertModelWithAdapters
 
+NUM_WORKERS = int(os.cpu_count() / 2)
+
 
 def main(args):
+    seed_everything(args.seed, workers=True)
     dict_args = vars(args)
     train_file = args.data_root + '/training_set_rel3.tsv'
     prompts_file = args.data_root + '/essay_prompts.json'
@@ -21,7 +26,8 @@ def main(args):
             bert_model=args.bert_model,
             batch_size=args.batch_size,
             seq_len=args.max_seq_length,
-            essay_set=args.essay_set
+            essay_set=args.essay_set,
+            num_workers=NUM_WORKERS
         )
         model = BertModelWithAdapters(**dict_args)
     elif args.model == 'bert':
@@ -31,7 +37,8 @@ def main(args):
             bert_model=args.bert_model,
             batch_size=args.batch_size,
             seq_len=args.max_seq_length,
-            essay_set=args.essay_set
+            essay_set=args.essay_set,
+            num_workers=NUM_WORKERS
         )
         model = BertModel(**dict_args)
     else:
@@ -40,7 +47,8 @@ def main(args):
             prompts_file=prompts_file,
             batch_size=args.batch_size,
             seq_len=args.max_seq_length,
-            essay_set=args.essay_set
+            essay_set=args.essay_set,
+            num_workers=NUM_WORKERS
         )
         model = BiDAF(**dict_args)
     trainer = Trainer.from_argparse_args(
@@ -55,13 +63,14 @@ def main(args):
         model,
         datamodule=data
     )
-    trainer.test()
+    trainer.test(
+        model,
+        datamodule=data,
+        ckpt_path="best"
+    )
 
 
 if __name__ == '__main__':
-    model = 'original'
-    gpus = 1
-
     parser = argparse.ArgumentParser()
     parser = Trainer.add_argparse_args(parser)
     parser.add_argument('--model',
@@ -69,7 +78,6 @@ if __name__ == '__main__':
                         choices=('bert', 'bidaf', 'han', 'ensemble', 'original'),
                         help='The type of model used.')
     temp_args, _ = parser.parse_known_args()
-    temp_args.model = model
     # let the model add what it wants
     if temp_args.model == "original":
         parser = BertModelWithAdapters.add_model_specific_args(parser)
@@ -99,9 +107,6 @@ if __name__ == '__main__':
                         default=32,
                         help='Batch size per GPU. Scales automatically when \
                                   multiple GPUs are available.')
-    args, _ = parser.parse_known_args()
-    args.model = model
-    args.gpus = gpus
-    seed_everything(args.seed, workers=True)
-
+    
+    args = parser.parse_args()
     main(args)

@@ -126,7 +126,7 @@ def collate_fn_lightning(examples: List[Tuple[int, int, List[int], List[int], fl
 
 
 class BertDataModule(LightningDataModule):
-    def __init__(self, train_file: str, prompts_file: str, bert_model: str, seq_len: int, batch_size: int, essay_set: int):
+    def __init__(self, train_file: str, prompts_file: str, bert_model: str, seq_len: int, batch_size: int, essay_set: int, num_workers: int):
         super().__init__()
         self.train_file = train_file
         self.seq_len = seq_len
@@ -134,6 +134,7 @@ class BertDataModule(LightningDataModule):
         self.bert_model = bert_model
         self.batch_size = batch_size
         self.essay_set = essay_set
+        self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None):
         # Reading in essay prompts.
@@ -167,7 +168,7 @@ class BertDataModule(LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=collate_fn_lightning,
-            num_workers=2,
+            num_workers=self.num_workers,
             persistent_workers=True
         )
 
@@ -183,7 +184,7 @@ class BertDataModule(LightningDataModule):
             dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn_lightning,
-            num_workers=2,
+            num_workers=self.num_workers,
             persistent_workers=True
         )
 
@@ -199,6 +200,6 @@ class BertDataModule(LightningDataModule):
             dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn_lightning,
-            num_workers=2,
+            num_workers=self.num_workers,
             persistent_workers=True
         )

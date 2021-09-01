@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torchtext
 from torch import optim
 import torch.nn.functional as F
@@ -7,8 +6,7 @@ import torch.nn.functional as F
 import layers
 from pytorch_lightning import LightningModule
 
-from util import quadratic_weighted_kappa, log_final_results
-from json import dumps
+from util import log_final_results
 
 
 class BiDAF(LightningModule):
@@ -100,6 +98,7 @@ class BiDAF(LightningModule):
         essay_ids, essay_sets, x, prompts, scores, min_scores, max_scores = batch
         predictions = self(x, prompts)
         loss = F.mse_loss(predictions, scores)
+        self.log('train_loss', loss)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -142,10 +141,6 @@ class BiDAF(LightningModule):
         final_results = log_final_results(outputs, self.prompts)
         self.log_dict(final_results)
 
-        print(f"Val Results: {dumps(final_results, indent=4)}")
-
     def test_epoch_end(self, outputs):
         final_results = log_final_results(outputs, self.prompts)
         self.log_dict(final_results)
-
-        print(f"Test Results: {dumps(final_results, indent=4)}")
