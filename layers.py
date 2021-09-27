@@ -177,127 +177,22 @@ class BiDAFOutput(nn.Module):
     def __init__(self, hidden_size, seq_len):
         super(BiDAFOutput, self).__init__()
         self.linear_1_mod = nn.Linear(2 * hidden_size, 2 * hidden_size)
-        self.linear_1_att = nn.Linear(8 * hidden_size, 8 * hidden_size)
         self.activation_1_mod = nn.Tanh()
-        self.activation_1_att = nn.Tanh()
-        self.linear_2 = nn.Linear(10 * hidden_size, 1)
+        self.linear_2 = nn.Linear(2 * hidden_size, 1)
         self.activation_2 = nn.Sigmoid()
 
-    def forward(self, att, mod):
-        # logits_1 = torch.cat([att, mod], -1)
-        att = self.activation_1_att(self.linear_1_att(att))
+        self.encoder = RNNEncoder(
+            input_size=2 * hidden_size,
+            hidden_size=hidden_size,
+            num_layers=1,
+            drop_prob=0.1
+        )
+
+    def forward(self, att, mod, c_len):
+        mod = self.encoder(mod, c_len)[:, -1]
         mod = self.activation_1_mod(self.linear_1_mod(mod))
 
-        logits_1 = torch.cat([att, mod], -1)
-
-        logits_1 = self.linear_2(logits_1)
+        logits_1 = self.linear_2(mod)
         logits_1 = self.activation_2(logits_1)
 
         return torch.squeeze(logits_1, -1)
-
-
-class GRUEncoder(nn.Module):
-    def __init__(self, embed_dim: int, hidden_size: int):
-        super(GRUEncoder, self).__init__()
-        self.encoder = nn.GRU(
-            input_size=embed_dim,
-            hidden_size=hidden_size,
-            bidirectional=True,
-            batch_first=True
-        )
-
-    def forward(self, embeddings):
-        return self.encoder(embeddings)
-
-
-class WordLevelAttention(nn.Module):
-    def __init__(self, hidden_size, dropout=0.1):
-        super(WordLevelAttention, self).__init__()
-        self.word_linear = nn.Linear(2 * hidden_size, 2 * hidden_size)
-        self.activation = nn.Tanh()
-        self.attention = nn.Linear(2 * hidden_size, 1, bias=False)
-        self.softmax = nn.Softmax(dim=-1)
-        self.vocab = torchtext.vocab.GloVe()
-        self.encoder = GRUEncoder(self.vocab.dim, hidden_size)
-        self.hidden_size = hidden_size
-        self.word_embedding = Embedding(self.vocab)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, sentences, sentence_lengths):
-        sentence_lengths, sentence_indices = torch.sort(sentence_lengths, dim=0, descending=True)
-        sentences = sentences[sentence_indices]
-
-        sentences = self.word_embedding(sentences)
-        sentences = self.dropout(sentences)
-
-        packed_words = pack_padded_sequence(sentences, sentence_lengths.tolist(), batch_first=True)
-        encoded_output, _ = self.encoder(packed_words)
-        sentences, _ = pad_packed_sequence(encoded_output, batch_first=True)
-
-        output = self.word_linear(sentences)
-        output = self.activation(output)
-        # Output -> (batch, seq_len, 2 * hidden_size)
-        attention_weights = self.softmax(self.attention(output))
-        # Output -> (batch, seq_len, 1)
-        attention_weights = attention_weights.expand(-1, -1, 2 * self.hidden_size)
-        output = attention_weights * sentences
-        # Output -> (batch, seq_len, 2  * hidden_size)
-        output = torch.sum(output, dim=1)
-        # Output -> (batch, 2  * hidden_size)
-        _, sentence_indices = torch.sort(sentence_indices, dim=0)
-        output = output[sentence_indices]
-        return output
-
-
-class SentenceLevelAttention(nn.Module):
-    def __init__(self, sent_hidden_size: int, word_hidden_size: int, dropout: float = 0.1):
-        super(SentenceLevelAttention, self).__init__()
-        self.sent_linear = nn.Linear(2 * sent_hidden_size, 2 * sent_hidden_size)
-        self.activation = nn.Tanh()
-        self.attention = nn.Linear(2 * sent_hidden_size, 1, bias=False)
-        self.softmax = nn.Softmax(dim=1)
-        self.dropout = nn.Dropout(dropout)
-        self.word_attention = WordLevelAttention(word_hidden_size, dropout)
-        self.sentence_encoder = GRUEncoder(2 * word_hidden_size, sent_hidden_size)
-
-    def forward(self, docs, doc_lengths, sent_lengths):
-        doc_lengths, doc_indices = torch.sort(doc_lengths, dim=0, descending=True)
-        docs = docs[doc_indices]
-        sent_lengths = sent_lengths[doc_indices]
-
-        # 'docs' is a three-dimensional tensor. Each doc has sentences and each sentence has tokens.
-        # By doing this, we are effectively packing all documents into a two-dimensional tensor of
-        # shape (num_sentences, tokens)
-        packed_docs = pack_padded_sequence(docs, doc_lengths.tolist(), batch_first=True)
-        packed_doc_lengths = pack_padded_sequence(sent_lengths, doc_lengths.tolist(), batch_first=True)
-        valid_batch = packed_docs.batch_sizes
-
-        packed_docs = self.word_attention(packed_docs.data, packed_doc_lengths.data)
-
-        packed_docs, _ = self.sentence_encoder(PackedSequence(packed_docs, valid_batch))
-        encoded_output, _ = pad_packed_sequence(packed_docs, batch_first=True)
-
-        output = self.sent_linear(encoded_output)
-        output = self.activation(output)
-        attention_weights = self.attention(output)
-        attention_weights = self.softmax(attention_weights)
-        output = attention_weights * encoded_output
-        output = torch.sum(output, dim=1)
-        _, doc_indices = torch.sort(doc_indices, dim=0)
-        output = output[doc_indices]
-
-        return output
-
-
-class HANOutput(nn.Module):
-    def __init__(self, hidden_size):
-        super(HANOutput, self).__init__()
-        self.projection = nn.Linear(hidden_size, 1)
-        self.activation = nn.Sigmoid()
-
-    def forward(self, pred):
-        pred = self.projection(pred)
-        pred = self.activation(pred)
-        pred = torch.squeeze(pred, -1)
-
-        return pred

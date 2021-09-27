@@ -7,6 +7,7 @@ import layers
 from pytorch_lightning import LightningModule
 
 from util import log_final_results
+from ujson import load as json_load
 
 
 class BiDAF(LightningModule):
@@ -33,7 +34,7 @@ class BiDAF(LightningModule):
         drop_prob (float): Dropout probability.
     """
 
-    def __init__(self, lr: float, hidden_size: int, max_seq_length: int, **kwargs):
+    def __init__(self, lr: float, hidden_size: int, max_seq_length: int, prompts: str, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         vocab = torchtext.vocab.GloVe()
@@ -48,13 +49,15 @@ class BiDAF(LightningModule):
 
         self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
                                      hidden_size=hidden_size,
-                                     num_layers=2,
-                                     drop_prob=0.1)
+                                     num_layers=1)
 
         self.out = layers.BiDAFOutput(hidden_size=hidden_size, seq_len=max_seq_length)
 
+        with open(prompts, 'r', encoding='utf-8') as fh:
+            self.prompts = json_load(fh)
+
     def configure_optimizers(self):
-        optimizer = optim.SGD(self.parameters(), lr=self.hparams.lr, momentum=0.9)
+        optimizer = optim.Adadelta(filter(lambda p: p.requires_grad, self.parameters()), lr=self.hparams.lr)
         return optimizer
 
     @staticmethod
@@ -64,6 +67,10 @@ class BiDAF(LightningModule):
                             type=int,
                             default=100,
                             help='Number of features in encoder hidden layers.')
+        parser.add_argument('--prompts',
+                            type=str,
+                            default='./data/essay_prompts.json',
+                            help='The JSON files with prompts')
         parser.add_argument('--lr',
                             type=float,
                             default=0.00001,
@@ -90,7 +97,7 @@ class BiDAF(LightningModule):
 
         mod = self.mod(att, c_len)  # (batch_size, c_len, 2 * hidden_size)
 
-        out = self.out(att[:, -1, :], mod[:, -1, :])
+        out = self.out(att, mod, c_len)
 
         return out
 

@@ -19,7 +19,7 @@ def main(args):
     dict_args = vars(args)
     train_file = args.data_root + '/training_set_rel3.tsv'
     prompts_file = args.data_root + '/essay_prompts.json'
-    if args.model == 'original':
+    if args.model == 'original' or args.model == "bert":
         data = BertDataModule(
             train_file=train_file,
             prompts_file=prompts_file,
@@ -30,17 +30,6 @@ def main(args):
             num_workers=NUM_WORKERS
         )
         model = BertModelWithAdapters(**dict_args)
-    elif args.model == 'bert':
-        data = BertDataModule(
-            train_file=train_file,
-            prompts_file=prompts_file,
-            bert_model=args.bert_model,
-            batch_size=args.batch_size,
-            seq_len=args.max_seq_length,
-            essay_set=args.essay_set,
-            num_workers=NUM_WORKERS
-        )
-        model = BertModel(**dict_args)
     else:
         data = BidafDataModule(
             train_file=train_file,
@@ -79,12 +68,10 @@ if __name__ == '__main__':
                         help='The type of model used.')
     temp_args, _ = parser.parse_known_args()
     # let the model add what it wants
-    if temp_args.model == "original":
+    if temp_args.model == "original" or temp_args.model == "bert":
         parser = BertModelWithAdapters.add_model_specific_args(parser)
-    elif temp_args.model == "bert":
-        parser = BertModel.add_model_specific_args(parser)
     elif temp_args.model == "bidaf":
-        parser = BertModelWithAdapters.add_model_specific_args(parser)
+        parser = BiDAF.add_model_specific_args(parser)
 
     parser.add_argument('--seed',
                         type=int,

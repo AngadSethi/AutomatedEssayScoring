@@ -23,15 +23,15 @@ class BertModelWithAdapters(LightningModule):
         config = AutoConfig.from_pretrained(bert_model, num_labels=1)
         config.hidden_dropout_prob = drop_prob
         self.bert_encoder = AutoModelWithHeads.from_pretrained(bert_model, config=config)
-
-        self.bert_encoder.add_adapter("aes")
+        if kwargs['model'] == "original":
+            self.bert_encoder.add_adapter("aes")
+            self.bert_encoder.train_adapter("aes")
+            self.bert_encoder.set_active_adapters("aes")
         self.bert_encoder.add_classification_head(
             "aes",
             num_labels=1,
             activation_function="relu"
         )
-        self.bert_encoder.train_adapter("aes")
-        self.bert_encoder.set_active_adapters("aes")
         self.activation = nn.Sigmoid()
         self.use_scheduler = use_scheduler
 

@@ -11,9 +11,11 @@ from torch.utils.data import Dataset, DataLoader
 from tqdm.auto import tqdm
 from ujson import load as json_load
 
+from util import clean_text
+
 
 class BiDAFDataset(Dataset):
-    def __init__(self, dataset: pd.DataFrame, prompts: dict, seq_len: int, mode: str = 'train'):
+    def __init__(self, dataset: pd.DataFrame, prompts: dict, seq_len: int, essay_set: int, mode: str = 'train'):
         """
         Initiate the BiDAF dataset with the appropriate arguments. Appropriate for a PyTorch dataset.
 
@@ -32,6 +34,8 @@ class BiDAFDataset(Dataset):
         self.essay_sets = self.datalist['essay_set'].tolist()
         self.essays = self.datalist['essay'].tolist()
 
+        self.essay_set = essay_set
+
         # Download or retrieve the vocabulary.
         self.vocab = torchtext.vocab.GloVe()
 
@@ -49,31 +53,21 @@ class BiDAFDataset(Dataset):
         self.prompt_encoded_bidaf_list = []
 
         # This is an intensive process, so we want to run it once. We do that and save the results as a tensor.
-        save_essays = os.path.join('data', mode + 'essays_tlen_' + str(seq_len) + '.pt')
-        for i in range(1, 9):
-            prompt = self.prompts[str(i)]
-            ans = torch.LongTensor(
-                [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-                 self.en_tokenizer(prompt['prompt'])])
-            self.prompt_encoded_bidaf_list.append(ans)
-        self.prompt_encoded_bidaf_list = pad_sequence(self.prompt_encoded_bidaf_list, batch_first=True)
+        prompt = self.prompts[str(essay_set)]
+        self.prompt_encoded_bidaf_list.append(
+            [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
+             self.en_tokenizer(clean_text(prompt['prompt']))])
 
         # This is an intensive process, so we want to run it once. We do that and save the results as a tensor.
-        if os.path.exists(save_essays):
-            self.x_encoded_bidaf_list = torch.load(save_essays)
-        else:
-            for essay in tqdm(self.datalist['essay'], total=len(self.datalist['essay']), desc="Tokenizing Essays"):
-                ans = torch.zeros(seq_len, dtype=torch.long)
-                tokens = self.en_tokenizer(essay)[:seq_len]
-                ans[:len(tokens)] = torch.LongTensor(
-                    [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in
-                     tokens])
-                self.x_encoded_bidaf_list.append(ans)
-            self.x_encoded_bidaf_list = torch.stack(self.x_encoded_bidaf_list)
-            torch.save(self.x_encoded_bidaf_list, save_essays)
+        for essay in tqdm(self.datalist['essay'], total=len(self.datalist['essay']), desc="Tokenizing Essays"):
+            tokens = self.en_tokenizer(clean_text(essay))[:seq_len]
+            if len(tokens) <= seq_len:
+                tokens = tokens + ([0 for _ in range(seq_len - len(tokens))])
+            self.x_encoded_bidaf_list.append(
+                [self.vocab.stoi[token] if token in self.vocab.stoi else self.vocab.stoi['unk'] for token in tokens])
 
-        self.prompt_encoded_bidaf = self.prompt_encoded_bidaf_list.tolist()
-        self.x_encoded_bidaf = self.x_encoded_bidaf_list.tolist()
+        self.prompt_encoded_bidaf = self.prompt_encoded_bidaf_list
+        self.x_encoded_bidaf = self.x_encoded_bidaf_list
 
     def __getitem__(self, index: int) -> Tuple[int, int, List[int], List[int], float, int, int]:
         """
@@ -86,13 +80,13 @@ class BiDAFDataset(Dataset):
             dataitem (Tuple[int, int, List[int], List[int], float, int, int])
         """
         essay_id = self.essay_ids[index]
-        essay_set = self.essay_sets[index]
+        essay_set = self.essay_set
         prompt = self.prompts.get(str(essay_set))
 
         domain1_min_score = prompt['scoring']['domain1_score']['min_score']
         domain1_max_score = prompt['scoring']['domain1_score']['max_score']
 
-        encoded_prompt = self.prompt_encoded_bidaf[int(essay_set) - 1]
+        encoded_prompt = self.prompt_encoded_bidaf[0]
         encoded_x = self.x_encoded_bidaf[index]
 
         score1 = self.domain1_scores[index]
@@ -117,7 +111,6 @@ class BiDAFDataset(Dataset):
             length (int): The number of examples.
         """
         return len(self.essay_ids)
-
 
 def collate_fn(examples):
     """
@@ -195,19 +188,22 @@ class BidafDataModule(LightningDataModule):
         self.train_dataset = BiDAFDataset(
             self.train_dataset,
             self.prompts,
-            self.seq_len
+            self.seq_len,
+            essay_set=self.essay_set
         )
         self.dev_dataset = BiDAFDataset(
             self.dev_dataset,
             self.prompts,
             self.seq_len,
-            mode='dev'
+            mode='dev',
+            essay_set=self.essay_set
         )
         self.test_dataset = BiDAFDataset(
             self.test_dataset,
             self.prompts,
             self.seq_len,
-            mode='test'
+            mode='test',
+            essay_set=self.essay_set
         )
 
     def train_dataloader(self):
@@ -216,8 +212,7 @@ class BidafDataModule(LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=collate_fn,
-            num_workers=self.num_workers,
-            persistent_workers=True
+            num_workers=self.num_workers
         )
 
     def val_dataloader(self):
@@ -225,8 +220,7 @@ class BidafDataModule(LightningDataModule):
             self.dev_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn,
-            num_workers=self.num_workers,
-            persistent_workers=True
+            num_workers=self.num_workers
         )
 
     def test_dataloader(self):
@@ -234,6 +228,5 @@ class BidafDataModule(LightningDataModule):
             self.test_dataset,
             batch_size=self.batch_size,
             collate_fn=collate_fn,
-            num_workers=self.num_workers,
-            persistent_workers=True
+            num_workers=self.num_workers
         )

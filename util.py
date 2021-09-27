@@ -3,9 +3,18 @@
 Author:
     Angad Sethi (angadsethi_2k18co066@dtu.ac.in)
 """
+import nltk
 import numpy as np
 import torch
 import torch.nn.functional as F
+from string import punctuation
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+nltk.download('stopwords')
+nltk.download('wordnet')
+lemmatizer = WordNetLemmatizer()
+stop_words = stopwords.words("english")
 
 
 def confusion_matrix(rater_a, rater_b, min_rating=None, max_rating=None):
@@ -181,3 +190,10 @@ def masked_softmax(logits, mask: torch.Tensor, dim=-1, log_softmax=False):
     probs = softmax_fn(masked_logits, dim)
 
     return probs
+
+
+def clean_text(text: str):
+    text = text.lower()
+    text = ''.join([x for x in text if x not in punctuation])
+    text = ' '.join([lemmatizer.lemmatize(word) for word in text.split(' ') if word not in stop_words])
+    return text
