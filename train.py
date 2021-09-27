@@ -4,12 +4,11 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from bert.dataset import BertDataModule
-from bert.model import BertModel
 import argparse
 
 from bidaf.dataset import BidafDataModule
 from bidaf.model import BiDAF
-from models import BertModelWithAdapters
+from bert.model import BertModelWithAdapters
 
 NUM_WORKERS = int(os.cpu_count() / 2)
 

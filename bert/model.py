@@ -1,42 +1,55 @@
+"""Top-level model classes.
+
+Author:
+    Angad Sethi
+"""
 import torch
-from torch import optim
 import torch.nn as nn
-import transformers
-import torch.nn.functional as F
 from pytorch_lightning import LightningModule
-from ujson import load as json_load
+from torch import optim
+from transformers import AutoConfig, AutoModelWithHeads
 
 from util import log_final_results
+import torch.nn.functional as F
+from ujson import load as json_load
 
 
-class BertModel(LightningModule):
-    def __init__(self, lr: float, prompts: str, bert_model: str, **kwargs):
+class BertModelWithAdapters(LightningModule):
+    def __init__(self, lr: float, prompts: str, bert_model: str, drop_prob: float, use_scheduler: str,
+                 max_seq_length: int, **kwargs):
         super().__init__()
-        self.save_hyperparameters("lr", "bert_model")
-        # Download the BERT model from Huggingface hub.
-        self.bert_model = transformers.BertModel.from_pretrained(bert_model, output_hidden_states=True)
-        self.bert_config = self.bert_model.config
+        self.save_hyperparameters()
+        config = AutoConfig.from_pretrained(bert_model, num_labels=1)
+        config.hidden_dropout_prob = drop_prob
+        self.bert_encoder = AutoModelWithHeads.from_pretrained(bert_model, config=config)
+        if kwargs['model'] == "original":
+            self.bert_encoder.add_adapter("aes")
+            self.bert_encoder.train_adapter("aes")
+            self.bert_encoder.set_active_adapters("aes")
+        self.bert_encoder.add_classification_head(
+            "aes",
+            num_labels=1,
+            activation_function="relu"
+        )
+        self.activation = nn.Sigmoid()
+        self.use_scheduler = use_scheduler
 
         with open(prompts, 'r', encoding='utf-8') as fh:
             self.prompts = json_load(fh)
 
-        # The linear layer for the pooler output.
-        self.projection = nn.Linear(
-            in_features=self.bert_config.hidden_size,
-            out_features=1,
-            bias=True
-        )
-
-        # The activation for the output of the pooler layer.
-        self.activation = nn.Sigmoid()
-
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr)
-        return optimizer
+        if self.use_scheduler == "no":
+            return optimizer
+        lr_scheduler = optim.lr_scheduler.CyclicLR(optimizer, 0.04 * self.hparams.lr, self.hparams.lr, cycle_momentum=False)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": lr_scheduler
+        }
 
     @staticmethod
     def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("BertModel")
+        parser = parent_parser.add_argument_group("BertAdapterModel")
         parser.add_argument('--bert_model',
                             type=str,
                             default='bert-base-uncased',
@@ -54,23 +67,21 @@ class BertModel(LightningModule):
                             type=int,
                             default=384,
                             help='The maximum sequence length that is provided to the model.')
+        parser.add_argument('--drop_prob',
+                            type=float,
+                            default=0.2,
+                            help='The dropout probability')
+        parser.add_argument('--use_scheduler',
+                            type=str,
+                            default="no",
+                            choices=("yes", "no"),
+                            help='Should the model use a cyclic LR scheduler?')
         return parent_parser
 
-    def forward(self, x: torch.LongTensor, masks: torch.BoolTensor) -> torch.Tensor:
-        """
-        The method which "pushes" forward the input to produce a single score for each example in the batch.
-        Args:
-            x (torch.LongTensor): The token IDs
-            masks (torch.BoolTensor): The tensor with 1s in position of importance
-
-        Returns:
-
-        """
-        outputs = self.bert_model(x, attention_mask=masks)
-
-        outputs = self.activation(self.projection(outputs.last_hidden_state[:, 0]))
-
-        return torch.squeeze(outputs, -1)
+    def forward(self, x: torch.LongTensor, masks: torch.BoolTensor):
+        output = self.bert_encoder(input_ids=x, attention_mask=masks).logits
+        output = self.activation(output)
+        return torch.squeeze(output, -1)
 
     def training_step(self, batch, batch_idx):
         essay_ids, essay_sets, x, masks, scores, min_scores, max_scores = batch
@@ -88,7 +99,7 @@ class BertModel(LightningModule):
         scores_domain1 = min_scores + ((max_scores - min_scores) * scores)
 
         self.log('val_loss', loss)
-        
+
         return {
             'essay_ids': essay_ids,
             'essay_sets': essay_sets,
