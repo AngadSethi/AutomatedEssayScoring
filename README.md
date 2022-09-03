@@ -17,3 +17,19 @@ Our major contributions in the development of this systems are:
 - Compared our model's performance against previously developed models 
 - Incorporated modern encoders, like BERT, and modern concepts, like attention, into our models
 - Performed ablation studies to prove the efficacy of our models
+
+# Steps to re-create
+1. Create Conda environment
+  ```
+  conda env create -n aes -f requirements.txt
+  ```
+2. Activate environment
+  ```
+  conda activate aes
+  ```
+3. Begin training of model
+  Since we utilise [PyTorch Lightning](https://www.pytorchlightning.ai/), you can pass all arguments listed [here](https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-flags). Additionally, there are a few generic args listed [here](https://github.com/AngadSethi/AutomatedEssayScoring/blob/master/train.py) and model specific args listed [here](https://github.com/AngadSethi/AutomatedEssayScoring/blob/master/bert/model.py#L53-L780) and [here](https://github.com/AngadSethi/AutomatedEssayScoring/blob/master/bidaf/model.py#L66-L81).
+  A typical train command looks something like this:
+  ```python
+  python train.py --model=original --bert_model=bert-base-uncased --batch_size=8 --max_seq_length=512
+  ```
